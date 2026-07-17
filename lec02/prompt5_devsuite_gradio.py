@@ -759,10 +759,10 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
             e_score = e_num / e_den if e_den > 0 else 0
             
             return pd.Series({
-                "Value_score": v_score,
-                "Access_score": a_score,
-                "Evidence_score": e_score,
-                "Traction_quotient": v_score * a_score * e_score
+                "Value_score": round(v_score, 4),
+                "Access_score": round(a_score, 4),
+                "Evidence_score": round(e_score, 4),
+                "Traction_quotient": round(v_score * a_score * e_score, 4)
             })
         
         # Apply row-level scoring
@@ -792,9 +792,9 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
             "Overall_Sample": [
                 len(scored_df),
                 100.0,
-                round(v_ov, 3),
-                round(a_ov, 3),
-                round(e_ov, 3),
+                round(v_ov, 4),
+                round(a_ov, 4),
+                round(e_ov, 4),
                 round(traction_ov, 4)
             ]
         })
