@@ -768,8 +768,8 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
         # Apply row-level scoring
         individual_scores = analysis_norm[numeric_cols].apply(score_row, axis=1)
         
-        # Build scored dataframe
-        scored_df = df_proc.copy()
+        # Build scored dataframe using ORIGINAL raw data + scores
+        scored_df = df_raw.copy() if df_raw is not None else df_proc.copy()
         scored_df["Segment"] = analysis_df["Segment"]
         scored_df["Value_score"] = individual_scores["Value_score"].values
         scored_df["Access_score"] = individual_scores["Access_score"].values
