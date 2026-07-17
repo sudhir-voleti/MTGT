@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════
 # Generic Customer Segmentation & Traction Audit — 6-Tab Gradio App
-# With Individual-Level Scoring, Histogram, and CSV Export
+# FIXED: Individual scoring + reflection moved to Tab 5
 # Paste into ONE Colab cell and run
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -210,16 +210,18 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
                 )
     
     # ═════════════════════════════════════════════════════════════════
-    # TAB 5: Mapping Traction Components (Manual — no auto-fill)
+    # TAB 5: Mapping Traction Components + Reflection
     # ═════════════════════════════════════════════════════════════════
     with gr.Tab("🔧 Mapping Traction Components"):
         
         gr.Markdown("""
         ## Map Variables to Traction Components
-        **Step 1:** Check variables for each component. **Step 2:** Set weights (0–1+).
-        Weight = 0 excludes the variable. Weight > 0 includes it proportionally.
+        **Step 1:** Check variables for each component. 
+        **Step 2:** Reflect on your mapping choices.
+        **Step 3:** Set weights (0–1+).
         """)
         
+        # ── Step 1: Checkboxes ──────────────────────────────────────
         gr.Markdown("### Step 1: Select Variables per Component")
         
         with gr.Row():
@@ -247,8 +249,21 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
                     interactive=False
                 )
         
+        # ── Step 2: Reflection ──────────────────────────────────────
         gr.Markdown("---")
-        gr.Markdown("### Step 2: Set Weights for Selected Variables")
+        gr.Markdown("### Step 2: 📝 Reflect on Your Mapping")
+        gr.Markdown("*Why did you map these specific variables to Value/Access/Evidence? What trade-offs did you consider?*")
+        
+        reflection_box = gr.Textbox(
+            label="Your Reflection",
+            value="",
+            lines=6,
+            interactive=True
+        )
+        
+        # ── Step 3: Weight editor ─────────────────────────────────────
+        gr.Markdown("---")
+        gr.Markdown("### Step 3: Set Weights for Selected Variables")
         gr.Markdown("*Format: `variable_name=Component:weight` one per line. Auto-populates from selections above with default weight=1.*")
         
         weight_editor = gr.Textbox(
@@ -323,29 +338,18 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
             interactive=False
         )
         
-        gr.Markdown("---")
-        gr.Markdown("### 📝 Reflection: Why This Mapping?")
-        gr.Markdown("*Explain your reasoning for mapping variables to Value/Access/Evidence. What trade-offs did you consider?*")
-        
-        reflection_box = gr.Textbox(
-            label="Your Reflection",
-            value="",
-            lines=6,
-            interactive=True
-        )
-        
         # Export section
         gr.Markdown("---")
         gr.Markdown("### 📥 Export")
         
         with gr.Row():
-            export_report_btn = gr.Button("📄 Download Report (Markdown)", variant="secondary", size="sm")
+            export_report_btn = gr.Button("📄 Download Report (TXT)", variant="secondary", size="sm")
             export_csv_btn = gr.Button("📊 Download Scored Data (CSV)", variant="secondary", size="sm")
         
         export_file = gr.File(label="Download", interactive=False)
         export_status = gr.Textbox(
             label="Export Status",
-            value="Calculate traction and write reflection, then export.",
+            value="Calculate traction, then export.",
             interactive=False
         )
     
@@ -709,18 +713,18 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
     # ── Traction calculation (Overall + Segment-wise + Individual) ────
     def handle_traction(df_proc, labels, weight_text, segment_names, df_raw):
         if df_proc is None:
-            return "❌ Run segmentation in Tab 3 first.", None, None, "", None, None
+            return "❌ Run segmentation in Tab 3 first.", None, None, "", None, None, None
         
         weights = parse_weights(weight_text)
         if not weights:
-            return "❌ Set weights in Tab 5 first. Check variables and assign weights.", None, None, "", None, None
+            return "❌ Set weights in Tab 5 first. Check variables and assign weights.", None, None, "", None, None, None
         
         value_vars = [v for v, w in weights.items() if w.get("Value", 0) > 0]
         access_vars = [v for v, w in weights.items() if w.get("Access", 0) > 0]
         evidence_vars = [v for v, w in weights.items() if w.get("Evidence", 0) > 0]
         
         if not value_vars or not access_vars or not evidence_vars:
-            return "❌ Each component needs at least one variable with weight > 0.", None, None, "", None, None
+            return "❌ Each component needs at least one variable with weight > 0.", None, None, "", None, None, None
         
         analysis_df = df_proc.copy()
         if labels is not None:
@@ -728,7 +732,8 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
         else:
             analysis_df["Segment"] = "Overall"
         
-        numeric_cols = analysis_df.select_dtypes(include=[np.number]).columns.tolist()
+        # Min-max normalize only numeric columns (exclude Segment)
+        numeric_cols = [c for c in analysis_df.columns if c != "Segment" and pd.api.types.is_numeric_dtype(analysis_df[c])]
         analysis_norm = analysis_df.copy()
         for col in numeric_cols:
             col_min = analysis_df[col].min()
@@ -738,32 +743,32 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
             else:
                 analysis_norm[col] = 0.5
         
-        def compute_scores(data_norm):
-            v_num = sum(data_norm[v] * weights[v]["Value"] for v in value_vars)
+        # ── Row-level scoring function ──────────────────────────────
+        def score_row(row):
+            """Compute scores for a single row (Series)."""
+            v_num = sum(row[v] * weights[v]["Value"] for v in value_vars)
             v_den = sum(weights[v]["Value"] for v in value_vars)
             v_score = v_num / v_den if v_den > 0 else 0
             
-            a_num = sum(data_norm[v] * weights[v]["Access"] for v in access_vars)
+            a_num = sum(row[v] * weights[v]["Access"] for v in access_vars)
             a_den = sum(weights[v]["Access"] for v in access_vars)
             a_score = a_num / a_den if a_den > 0 else 0
             
-            e_num = sum(data_norm[v] * weights[v]["Evidence"] for v in evidence_vars)
+            e_num = sum(row[v] * weights[v]["Evidence"] for v in evidence_vars)
             e_den = sum(weights[v]["Evidence"] for v in evidence_vars)
             e_score = e_num / e_den if e_den > 0 else 0
             
-            return v_score, a_score, e_score
+            return pd.Series({
+                "Value_score": v_score,
+                "Access_score": a_score,
+                "Evidence_score": e_score,
+                "Traction_quotient": v_score * a_score * e_score
+            })
         
-        # ── Individual-level scores ─────────────────────────────────
-        individual_scores = analysis_norm.apply(
-            lambda row: pd.Series({
-                "Value_score": compute_scores(row.to_frame().T)[0],
-                "Access_score": compute_scores(row.to_frame().T)[1],
-                "Evidence_score": compute_scores(row.to_frame().T)[2],
-                "Traction_quotient": compute_scores(row.to_frame().T)[0] * compute_scores(row.to_frame().T)[1] * compute_scores(row.to_frame().T)[2]
-            }), axis=1
-        )
+        # Apply row-level scoring
+        individual_scores = analysis_norm[numeric_cols].apply(score_row, axis=1)
         
-        # Build scored dataframe with original columns + scores + segment
+        # Build scored dataframe
         scored_df = df_proc.copy()
         scored_df["Segment"] = analysis_df["Segment"]
         scored_df["Value_score"] = individual_scores["Value_score"].values
@@ -771,20 +776,21 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
         scored_df["Evidence_score"] = individual_scores["Evidence_score"].values
         scored_df["Traction_quotient"] = individual_scores["Traction_quotient"].values
         
-        # Add segment rank (1 = best traction)
+        # Segment rank (1 = best traction mean)
         seg_traction_mean = scored_df.groupby("Segment")["Traction_quotient"].mean().sort_values(ascending=False)
         seg_rank_map = {seg: i+1 for i, seg in enumerate(seg_traction_mean.index)}
         scored_df["Segment_rank"] = scored_df["Segment"].map(seg_rank_map)
         
         # ── Overall Sample ──────────────────────────────────────────
-        overall_data = analysis_norm
-        v_ov, a_ov, e_ov = compute_scores(overall_data)
-        traction_ov = v_ov * a_ov * e_ov
+        v_ov = scored_df["Value_score"].mean()
+        a_ov = scored_df["Access_score"].mean()
+        e_ov = scored_df["Evidence_score"].mean()
+        traction_ov = scored_df["Traction_quotient"].mean()
         
         overall_result = pd.DataFrame({
             "Metric": ["Size_Count", "Size_Pct", "Value", "Access", "Evidence", "Traction"],
             "Overall_Sample": [
-                len(overall_data),
+                len(scored_df),
                 100.0,
                 round(v_ov, 3),
                 round(a_ov, 3),
@@ -795,7 +801,7 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
         
         # ── Segment-wise ────────────────────────────────────────────
         if labels is not None:
-            segments = sorted(analysis_df["Segment"].unique())
+            segments = sorted(scored_df["Segment"].unique())
             segment_results = []
             
             for seg in segments:
@@ -872,10 +878,10 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
         plt.savefig(hist_path, dpi=150, bbox_inches='tight')
         plt.close(fig)
         
-        # Preview of individual scores (first 10 rows, key columns)
-        preview_cols = [c for c in scored_df.columns if c in ["Segment", "Value_score", "Access_score", "Evidence_score", "Traction_quotient", "Segment_rank"]]
+        # Preview of individual scores
+        preview_cols = ["Segment", "Value_score", "Access_score", "Evidence_score", "Traction_quotient", "Segment_rank"]
         if df_raw is not None and len(df_raw.columns) > 0:
-            id_col = df_raw.columns[0]  # assume first column is ID
+            id_col = df_raw.columns[0]
             if id_col in scored_df.columns:
                 preview_cols = [id_col] + preview_cols
         
@@ -916,7 +922,13 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
             "",
             "---",
             "",
-            "## 2. Variable Weights",
+            "## 2. Reflection",
+            "",
+            reflection if reflection else "*(No reflection provided)*",
+            "",
+            "---",
+            "",
+            "## 3. Variable Weights",
             "",
             "```",
             weight_text if weight_text else "(No weights set)",
@@ -924,7 +936,7 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
             "",
             "---",
             "",
-            "## 3. Traction Results",
+            "## 4. Traction Results",
             "",
             f"**Status:** {traction_status}",
             "",
@@ -954,18 +966,12 @@ with gr.Blocks(title="Caselet: Customer Segmentation & Traction Audit", theme=gr
             "",
             "---",
             "",
-            "## 4. Reflection",
-            "",
-            reflection if reflection else "*(No reflection provided)*",
-            "",
-            "---",
-            "",
             "*End of Report*",
         ])
         
         report_text = "\n".join(report_lines)
         
-        report_path = "/tmp/traction_report.md"
+        report_path = "/tmp/traction_report.txt"
         with open(report_path, "w") as f:
             f.write(report_text)
         
