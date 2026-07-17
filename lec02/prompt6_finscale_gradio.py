@@ -461,7 +461,9 @@ with gr.Blocks(title="Panel Traction: Dynamic Account Scoring", theme=gr.themes.
         wide = scored_long_df.pivot(index=account_col, columns=period_col, values="Traction_quotient")
         wide.columns = [f"Period_{c}" for c in wide.columns]
         wide = wide.reset_index()
-        wide = wide.fillna(wide.mean())
+        # Handle missing periods — only fill numeric columns
+        numeric_period_cols = [c for c in wide.columns if c.startswith("Period_")]
+        wide[numeric_period_cols] = wide[numeric_period_cols].fillna(wide[numeric_period_cols].mean())
         
         # Cluster on trajectory matrix
         X = wide.drop(columns=[account_col]).values
