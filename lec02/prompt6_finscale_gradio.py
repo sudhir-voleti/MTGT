@@ -387,13 +387,14 @@ with gr.Blocks(title="Panel Traction: Dynamic Account Scoring", theme=gr.themes.
         )
     
     def update_weight_editor(processed_cols, value_vars, access_vars, evidence_vars):
-        if not processed_cols:
+        # processed_cols is a DataFrame, check if it's None or empty
+        if processed_cols is None or (isinstance(processed_cols, pd.DataFrame) and processed_cols.empty):
             return ""
         return build_weight_text(value_vars, access_vars, evidence_vars)
-    
+
     def handle_clear_weights(processed_cols):
-        if not processed_cols:
-            return "", gr.CheckboxGroup(choices=["(Configure panel first)"], value=[]), gr.CheckboxGroup(choices=["(Configure panel first)"], value=[]), gr.CheckboxGroup(choices=["(Configure panel first)"], value=[])
+        if processed_cols is None or (isinstance(processed_cols, pd.DataFrame) and processed_cols.empty):
+            return "", gr.CheckboxGroup(choices=["(Configure panel first)"], value=[]),   
         return (
             "",
             gr.CheckboxGroup(choices=processed_cols, value=[], label="Value Variables", interactive=True),
