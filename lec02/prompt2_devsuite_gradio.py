@@ -1,5 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════
-# Caselet 1: 4-Tab App — Customer Segmentation (ipywidgets)
+# Caselet 1: 4-Tab Customer Segmentation (ipywidgets) — VERSION 2
+# FIXED: Transposed centroids (variables as rows), 4-decimal rounding everywhere
 # Paste into ONE Jupyter/Colab cell and run
 # ═══════════════════════════════════════════════════════════════════════
 
