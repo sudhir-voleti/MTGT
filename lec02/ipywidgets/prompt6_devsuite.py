@@ -32,6 +32,7 @@ state = {
     'account_col': None,
     'period_col': None,
     'numeric_cols': [],
+    'dummy_cols': [],
     'scored_long': None,
     'scored_wide': None,
     'k': 3
@@ -409,19 +410,42 @@ def handle_configure(b):
         config_status.value = "<p style='color:red;'>❌ Account and Period must be different.</p>"
         return
 
-    state['df_processed'] = df
+    # ── NEW: Auto dummy-encode non-numeric columns ─────────────────────
+    # Identify columns that are NOT account, NOT period, and NOT numeric
+    non_numeric_cols = [c for c in df.columns if c not in [ac, pc] and not pd.api.types.is_numeric_dtype(df[c])]
+
+    df_processed = df.copy()
+    dummy_cols = []
+    skipped_cols = []
+
+    for col in non_numeric_cols:
+        n_unique = df_processed[col].nunique()
+        # Only dummy-encode if reasonable cardinality (≤20 categories) and not all unique (like an ID)
+        if n_unique <= 20 and n_unique > 1 and n_unique < len(df_processed) * 0.9:
+            dummies = pd.get_dummies(df_processed[col], prefix=col, drop_first=False)
+            df_processed = pd.concat([df_processed, dummies], axis=1)
+            dummy_cols.extend(dummies.columns.tolist())
+        else:
+            skipped_cols.append(f"{col} ({n_unique} unique)")
+
+    # Now numeric_cols includes original numeric + dummy columns
+    numeric_cols = [c for c in df_processed.columns if c not in [ac, pc] and pd.api.types.is_numeric_dtype(df_processed[c])]
+
+    state['df_processed'] = df_processed
     state['account_col'] = ac
     state['period_col'] = pc
-    state['numeric_cols'] = [c for c in df.columns if c not in [ac, pc] and pd.api.types.is_numeric_dtype(df[c])]
+    state['numeric_cols'] = numeric_cols
+    state['dummy_cols'] = dummy_cols
 
     if len(state['numeric_cols']) < 2:
-        config_status.value = "<p style='color:red;'>❌ Need at least 2 numeric variables for traction mapping.</p>"
+        config_status.value = "<p style='color:red;'>❌ Need at least 2 numeric variables (original or dummy-encoded) for traction mapping.</p>"
         return
 
     n_accounts = df[ac].nunique()
     n_periods = df[pc].nunique()
 
-    config_status.value = f"<p style='color:green;'>✅ Panel configured: <b>{n_accounts:,}</b> accounts × <b>{n_periods:,}</b> periods. <b>{len(state['numeric_cols'])}</b> numeric variables.</p>"
+    skip_msg = f"<br>Skipped: {', '.join(skipped_cols)}" if skipped_cols else ""
+    config_status.value = f"<p style='color:green;'>✅ Panel configured: <b>{n_accounts:,}</b> accounts × <b>{n_periods:,}</b> periods. <b>{len(numeric_cols)}</b> numeric variables ({len(numeric_cols) - len(dummy_cols)} original + {len(dummy_cols)} dummies).{skip_msg}</p>"
 
     value_check.options = state['numeric_cols']
     value_check.value = ()
@@ -433,7 +457,7 @@ def handle_configure(b):
     evidence_check.value = ()
     evidence_check.disabled = False
 
-    mapping_status.value = f"<p style='color:green;'>✅ <b>{len(state['numeric_cols'])}</b> numeric variables available. Select variables for each component.</p>"
+    mapping_status.value = f"<p style='color:green;'>✅ <b>{len(state['numeric_cols'])}</b> variables available ({len(numeric_cols) - len(dummy_cols)} original numeric + {len(dummy_cols)} dummy-encoded). Select for each component.</p>"
     run_btn.disabled = False
 
     tabs.selected_index = 1
@@ -519,26 +543,34 @@ def handle_compute(b):
         scored_long["Traction_quotient"] = scores["Traction_quotient"].values
         state['scored_long'] = scored_long
 
-        # Wide format
-        wide = scored_long.pivot(index=ac, columns=pc, values="Traction_quotient")
+        # ── Wide format: FIX — handle unbalanced panel with fillna, not dropna ──
+        # First, ensure period column is string for safe pivot column naming
+        scored_long_copy = scored_long.copy()
+        scored_long_copy[pc] = scored_long_copy[pc].astype(str)
+
+        wide = scored_long_copy.pivot(index=ac, columns=pc, values="Traction_quotient")
         wide.columns = [f"Period_{c}" for c in wide.columns]
         wide = wide.reset_index()
-        numeric_period_cols = [c for c in wide.columns if c.startswith("Period_")]
+        period_cols = [c for c in wide.columns if c.startswith("Period_")]
 
-        # Drop rows with any NaN (accounts missing periods) — quietly, just report count
-        n_before = len(wide)
-        wide = wide.dropna(subset=numeric_period_cols)
-        n_dropped = n_before - len(wide)
+        # DIAGNOSTIC: report panel balance
+        n_accounts_total = wide[ac].nunique()
+        n_periods_total = len(period_cols)
+        n_complete = wide.dropna(subset=period_cols).shape[0]
 
-        if n_dropped > 0:
-            print(f"Note: Dropped {n_dropped} accounts with incomplete period data.")
+        # Fill missing periods with column mean (matches Gradio behavior)
+        if period_cols:
+            col_means = wide[period_cols].mean()
+            wide[period_cols] = wide[period_cols].fillna(col_means)
 
-        if len(wide) < k:
-            run_status.value = f"<p style='color:red;'>❌ Only {len(wide):,} accounts with complete data, need ≥{k} for K={k}.</p>"
+        n_after_fill = len(wide)
+
+        if n_after_fill < k:
+            run_status.value = f"<p style='color:red;'>❌ Only {n_after_fill:,} accounts, need ≥{k} for K={k}.</p>"
             return
 
         # Cluster
-        X = wide[numeric_period_cols].values
+        X = wide[period_cols].values
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
 
@@ -576,9 +608,9 @@ def handle_compute(b):
         centroids_data = []
         for i in range(k):
             cluster_data = wide[wide["Cluster"] == i]
-            mean_traj = cluster_data[numeric_period_cols].mean()
+            mean_traj = cluster_data[period_cols].mean()
             row = {"Cluster": f"Cluster {i+1}", "Size (n)": len(cluster_data)}
-            for col in numeric_period_cols:
+            for col in period_cols:
                 row[col] = round(mean_traj[col], 4)
             centroids_data.append(row)
         centroids = pd.DataFrame(centroids_data)
@@ -593,12 +625,12 @@ def handle_compute(b):
 
         # Summary
         summary = wide.copy()
-        summary["Mean_Traction"] = summary[numeric_period_cols].mean(axis=1).round(4)
-        summary["Std_Traction"] = summary[numeric_period_cols].std(axis=1).round(4)
-        summary["Trend"] = (summary[numeric_period_cols[-1]] - summary[numeric_period_cols[0]]).round(4)
+        summary["Mean_Traction"] = summary[period_cols].mean(axis=1).round(4)
+        summary["Std_Traction"] = summary[period_cols].std(axis=1).round(4)
+        summary["Trend"] = (summary[period_cols[-1]] - summary[period_cols[0]]).round(4)
         summary["Cluster_Label"] = [f"Cluster {l+1}" for l in labels]
 
-        summary_display = summary[[ac, "Cluster_Label", "Mean_Traction", "Std_Traction", "Trend"] + numeric_period_cols[:3] + numeric_period_cols[-3:]]
+        summary_display = summary[[ac, "Cluster_Label", "Mean_Traction", "Std_Traction", "Trend"] + period_cols[:3] + period_cols[-3:]]
 
         with summary_output:
             clear_output()
@@ -616,7 +648,8 @@ def handle_compute(b):
         # Initial trajectory plot
         generate_trajectory_plot(wide, "Cluster Means", "(None)", k)
 
-        run_status.value = f"<p style='color:green;'>✅ Computed traction for <b>{len(df):,}</b> rows. Clustered <b>{len(wide):,}</b> accounts into <b>{k}</b> trajectory clusters.</p>"
+        diag_msg = f" Panel: {n_accounts_total} accounts × {n_periods_total} periods. {n_complete} complete before fill."
+        run_status.value = f"<p style='color:green;'>✅ Computed traction for <b>{len(df):,}</b> rows. Clustered <b>{n_after_fill:,}</b> accounts into <b>{k}</b> trajectory clusters.{diag_msg}</p>"
 
         export_wide_btn.disabled = False
         export_long_btn.disabled = False
@@ -626,7 +659,9 @@ def handle_compute(b):
         tabs.selected_index = 2
 
     except Exception as e:
-        run_status.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
+        import traceback
+        tb = traceback.format_exc()
+        run_status.value = f"<p style='color:red;'>❌ Error: {str(e)}<br><pre>{tb}</pre></p>"
 
 def on_view_change(change):
     wide = state['scored_wide']
