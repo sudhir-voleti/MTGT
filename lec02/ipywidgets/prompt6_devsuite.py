@@ -422,7 +422,7 @@ def handle_configure(b):
         n_unique = df_processed[col].nunique()
         # Only dummy-encode if reasonable cardinality (≤20 categories) and not all unique (like an ID)
         if n_unique <= 20 and n_unique > 1 and n_unique < len(df_processed) * 0.9:
-            dummies = pd.get_dummies(df_processed[col], prefix=col, drop_first=False)
+            dummies = pd.get_dummies(df_processed[col], prefix=col, drop_first=False, dtype=int)
             df_processed = pd.concat([df_processed, dummies], axis=1)
             dummy_cols.extend(dummies.columns.tolist())
         else:
@@ -506,6 +506,9 @@ def handle_compute(b):
     try:
         numeric_cols = state['numeric_cols']
         df_norm = df.copy()
+        # Ensure all numeric columns are float for safe arithmetic
+        for col in numeric_cols:
+            df_norm[col] = df_norm[col].astype(float)
         for col in numeric_cols:
             col_min = df[col].min()
             col_max = df[col].max()
@@ -552,6 +555,10 @@ def handle_compute(b):
         wide.columns = [f"Period_{c}" for c in wide.columns]
         wide = wide.reset_index()
         period_cols = [c for c in wide.columns if c.startswith("Period_")]
+
+        # Ensure all period columns are float (not boolean or int) for safe arithmetic
+        for pc_col in period_cols:
+            wide[pc_col] = wide[pc_col].astype(float)
 
         # DIAGNOSTIC: report panel balance
         n_accounts_total = wide[ac].nunique()
