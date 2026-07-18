@@ -524,20 +524,21 @@ def handle_compute(b):
         wide.columns = [f"Period_{c}" for c in wide.columns]
         wide = wide.reset_index()
         numeric_period_cols = [c for c in wide.columns if c.startswith("Period_")]
-        wide[numeric_period_cols] = wide[numeric_period_cols].fillna(wide[numeric_period_cols].mean())
 
-        # Cluster — use only numeric Period columns, handle any remaining NaN
-        X_cols = [c for c in wide.columns if c.startswith("Period_")]
-        X = wide[X_cols].values
+        # Drop rows with any NaN (accounts missing periods) — quietly, just report count
+        n_before = len(wide)
+        wide = wide.dropna(subset=numeric_period_cols)
+        n_dropped = n_before - len(wide)
 
-        # Drop any rows with NaN (should be rare after fillna, but safety first)
-        valid_mask = ~np.isnan(X).any(axis=1)
-        X = X[valid_mask]
+        if n_dropped > 0:
+            print(f"Note: Dropped {n_dropped} accounts with incomplete period data.")
 
-        if len(X) < k:
-            run_status.value = f"<p style='color:red;'>❌ Only {len(X)} valid rows after removing NaN, need ≥{k} for K={k}.</p>"
+        if len(wide) < k:
+            run_status.value = f"<p style='color:red;'>❌ Only {len(wide):,} accounts with complete data, need ≥{k} for K={k}.</p>"
             return
 
+        # Cluster
+        X = wide[numeric_period_cols].values
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
 
@@ -565,11 +566,8 @@ def handle_compute(b):
 
         # Final K-Means
         km_final = KMeans(n_clusters=k, random_state=42, n_init=10)
-        labels_valid = km_final.fit_predict(X_scaled)
-
-        # Align labels back to full dataframe (NaN rows get -1 cluster)
-        wide["Cluster"] = -1
-        wide.loc[valid_mask, "Cluster"] = labels_valid
+        labels = km_final.fit_predict(X_scaled)
+        wide["Cluster"] = labels
         state['scored_wide'] = wide
         state['k'] = k
 
@@ -594,11 +592,11 @@ def handle_compute(b):
             ]))
 
         # Summary
-        summary = wide[wide["Cluster"] >= 0].copy()
+        summary = wide.copy()
         summary["Mean_Traction"] = summary[numeric_period_cols].mean(axis=1).round(4)
         summary["Std_Traction"] = summary[numeric_period_cols].std(axis=1).round(4)
         summary["Trend"] = (summary[numeric_period_cols[-1]] - summary[numeric_period_cols[0]]).round(4)
-        summary["Cluster_Label"] = [f"Cluster {l+1}" for l in summary["Cluster"]]
+        summary["Cluster_Label"] = [f"Cluster {l+1}" for l in labels]
 
         summary_display = summary[[ac, "Cluster_Label", "Mean_Traction", "Std_Traction", "Trend"] + numeric_period_cols[:3] + numeric_period_cols[-3:]]
 
