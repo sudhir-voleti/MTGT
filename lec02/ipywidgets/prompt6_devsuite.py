@@ -1,12 +1,12 @@
 # ═══════════════════════════════════════════════════════════════════════
 # App 2: Panel Traction Over Time — Dynamic Account Scoring (ipywidgets)
-# 3 tabs: Upload & Configure, Map Traction Components, Traction Over Time
+# BULLETPROOF VERSION — numeric columns only, no dummy encoding
 # Paste into ONE Jupyter/Colab cell and run
 # ═══════════════════════════════════════════════════════════════════════
 
 # ── Quiet install ─────────────────────────────────────────────────────
 import subprocess, sys
-for pkg in ["ipywidgets", "scikit-learn", "pandas", "matplotlib", "seaborn", "IPython"]:
+for pkg in ["ipywidgets", "scikit-learn", "pandas", "matplotlib", "IPython"]:
     try:
         __import__(pkg.replace("-", "_"))
     except ImportError:
@@ -32,7 +32,6 @@ state = {
     'account_col': None,
     'period_col': None,
     'numeric_cols': [],
-    'dummy_cols': [],
     'scored_long': None,
     'scored_wide': None,
     'k': 3
@@ -382,7 +381,7 @@ def handle_upload(change):
             f"📊 Unique accounts: {df[likely_account[0]].nunique() if likely_account else 'N/A'}",
             f"📊 Periods: {sorted(df[likely_period[0]].unique()) if likely_period else 'N/A'}",
             f"📊 Numeric: {len(df.select_dtypes(include=[np.number]).columns)}",
-            f"📊 Categorical/object: {len(df.select_dtypes(include=['object', 'category']).columns)}",
+            f"📊 Non-numeric (ignored): {len(df.select_dtypes(include=['object', 'category', 'bool']).columns)}",
             "",
             "Column breakdown:"
         ]
@@ -410,42 +409,22 @@ def handle_configure(b):
         config_status.value = "<p style='color:red;'>❌ Account and Period must be different.</p>"
         return
 
-    # ── NEW: Auto dummy-encode non-numeric columns ─────────────────────
-    # Identify columns that are NOT account, NOT period, and NOT numeric
-    non_numeric_cols = [c for c in df.columns if c not in [ac, pc] and not pd.api.types.is_numeric_dtype(df[c])]
+    # ── BULLETPROOF: numeric columns ONLY, drop everything else ─────────
+    numeric_cols = [c for c in df.columns if c not in [ac, pc] and pd.api.types.is_numeric_dtype(df[c])]
 
-    df_processed = df.copy()
-    dummy_cols = []
-    skipped_cols = []
-
-    for col in non_numeric_cols:
-        n_unique = df_processed[col].nunique()
-        # Only dummy-encode if reasonable cardinality (≤20 categories) and not all unique (like an ID)
-        if n_unique <= 20 and n_unique > 1 and n_unique < len(df_processed) * 0.9:
-            dummies = pd.get_dummies(df_processed[col], prefix=col, drop_first=False, dtype=int)
-            df_processed = pd.concat([df_processed, dummies], axis=1)
-            dummy_cols.extend(dummies.columns.tolist())
-        else:
-            skipped_cols.append(f"{col} ({n_unique} unique)")
-
-    # Now numeric_cols includes original numeric + dummy columns
-    numeric_cols = [c for c in df_processed.columns if c not in [ac, pc] and pd.api.types.is_numeric_dtype(df_processed[c])]
-
-    state['df_processed'] = df_processed
+    state['df_processed'] = df
     state['account_col'] = ac
     state['period_col'] = pc
     state['numeric_cols'] = numeric_cols
-    state['dummy_cols'] = dummy_cols
 
     if len(state['numeric_cols']) < 2:
-        config_status.value = "<p style='color:red;'>❌ Need at least 2 numeric variables (original or dummy-encoded) for traction mapping.</p>"
+        config_status.value = "<p style='color:red;'>❌ Need at least 2 numeric variables for traction mapping. Non-numeric columns are ignored.</p>"
         return
 
     n_accounts = df[ac].nunique()
     n_periods = df[pc].nunique()
 
-    skip_msg = f"<br>Skipped: {', '.join(skipped_cols)}" if skipped_cols else ""
-    config_status.value = f"<p style='color:green;'>✅ Panel configured: <b>{n_accounts:,}</b> accounts × <b>{n_periods:,}</b> periods. <b>{len(numeric_cols)}</b> numeric variables ({len(numeric_cols) - len(dummy_cols)} original + {len(dummy_cols)} dummies).{skip_msg}</p>"
+    config_status.value = f"<p style='color:green;'>✅ Panel configured: <b>{n_accounts:,}</b> accounts × <b>{n_periods:,}</b> periods. <b>{len(numeric_cols)}</b> numeric variables available. Non-numeric columns ignored.</p>"
 
     value_check.options = state['numeric_cols']
     value_check.value = ()
@@ -457,7 +436,7 @@ def handle_configure(b):
     evidence_check.value = ()
     evidence_check.disabled = False
 
-    mapping_status.value = f"<p style='color:green;'>✅ <b>{len(state['numeric_cols'])}</b> variables available ({len(numeric_cols) - len(dummy_cols)} original numeric + {len(dummy_cols)} dummy-encoded). Select for each component.</p>"
+    mapping_status.value = f"<p style='color:green;'>✅ <b>{len(state['numeric_cols'])}</b> numeric variables available. Select for each component.</p>"
     run_btn.disabled = False
 
     tabs.selected_index = 1
@@ -506,9 +485,6 @@ def handle_compute(b):
     try:
         numeric_cols = state['numeric_cols']
         df_norm = df.copy()
-        # Ensure all numeric columns are float for safe arithmetic
-        for col in numeric_cols:
-            df_norm[col] = df_norm[col].astype(float)
         for col in numeric_cols:
             col_min = df[col].min()
             col_max = df[col].max()
@@ -546,38 +522,18 @@ def handle_compute(b):
         scored_long["Traction_quotient"] = scores["Traction_quotient"].values
         state['scored_long'] = scored_long
 
-        # ── Wide format: FIX — handle unbalanced panel with fillna, not dropna ──
-        # First, ensure period column is string for safe pivot column naming
-        scored_long_copy = scored_long.copy()
-        scored_long_copy[pc] = scored_long_copy[pc].astype(str)
-
-        wide = scored_long_copy.pivot(index=ac, columns=pc, values="Traction_quotient")
+        # Wide format — EXACTLY like Gradio version
+        wide = scored_long.pivot(index=ac, columns=pc, values="Traction_quotient")
         wide.columns = [f"Period_{c}" for c in wide.columns]
         wide = wide.reset_index()
         period_cols = [c for c in wide.columns if c.startswith("Period_")]
 
-        # Ensure all period columns are float (not boolean or int) for safe arithmetic
-        for pc_col in period_cols:
-            wide[pc_col] = wide[pc_col].astype(float)
-
-        # DIAGNOSTIC: report panel balance
-        n_accounts_total = wide[ac].nunique()
-        n_periods_total = len(period_cols)
-        n_complete = wide.dropna(subset=period_cols).shape[0]
-
-        # Fill missing periods with column mean (matches Gradio behavior)
+        # Handle missing periods — fill with column mean (Gradio behavior)
         if period_cols:
-            col_means = wide[period_cols].mean()
-            wide[period_cols] = wide[period_cols].fillna(col_means)
-
-        n_after_fill = len(wide)
-
-        if n_after_fill < k:
-            run_status.value = f"<p style='color:red;'>❌ Only {n_after_fill:,} accounts, need ≥{k} for K={k}.</p>"
-            return
+            wide[period_cols] = wide[period_cols].fillna(wide[period_cols].mean())
 
         # Cluster
-        X = wide[period_cols].values
+        X = wide.drop(columns=[ac]).values
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
 
@@ -611,7 +567,6 @@ def handle_compute(b):
         state['k'] = k
 
         # Centroids with sizes
-        cluster_sizes = wide["Cluster"].value_counts().sort_index()
         centroids_data = []
         for i in range(k):
             cluster_data = wide[wide["Cluster"] == i]
@@ -655,8 +610,7 @@ def handle_compute(b):
         # Initial trajectory plot
         generate_trajectory_plot(wide, "Cluster Means", "(None)", k)
 
-        diag_msg = f" Panel: {n_accounts_total} accounts × {n_periods_total} periods. {n_complete} complete before fill."
-        run_status.value = f"<p style='color:green;'>✅ Computed traction for <b>{len(df):,}</b> rows. Clustered <b>{n_after_fill:,}</b> accounts into <b>{k}</b> trajectory clusters.{diag_msg}</p>"
+        run_status.value = f"<p style='color:green;'>✅ Computed traction for <b>{len(df):,}</b> rows. Clustered <b>{len(wide):,}</b> accounts into <b>{k}</b> trajectory clusters.</p>"
 
         export_wide_btn.disabled = False
         export_long_btn.disabled = False
