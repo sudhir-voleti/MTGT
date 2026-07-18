@@ -1091,16 +1091,14 @@ def handle_export_report(b):
     with open(report_path, "w") as f:
         f.write(report_text)
 
-    download_html = f"""
+    export_status.value = f"""
     <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
         <b>✅ Report saved</b><br>
         Path: {report_path}<br><br>
-        <i>In Colab: run <code>from google.colab import files; files.download('{report_path}')</code></i><br>
-        <i>In Jupyter: <a href="{FileLink(report_path).href}" target="_blank">Download report</a></i>
+        <b>To download:</b> Copy the path above and run in a new cell:<br>
+        <code>from google.colab import files; files.download('{report_path}')</code>
     </div>
     """
-    export_status.value = download_html
-
 
 def handle_export_csv(b):
     global state
@@ -1113,17 +1111,14 @@ def handle_export_csv(b):
     csv_path = "/tmp/scored_data.csv"
     scored_df.to_csv(csv_path, index=False)
 
-    download_html = f"""
+    export_status.value = f"""
     <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
-        <b>✅ CSV saved</b><br>
-        Path: {csv_path}<br>
-        Rows: {len(scored_df):,} | Columns: {len(scored_df.columns)}<br><br>
-        <i>In Colab: run <code>from google.colab import files; files.download('{csv_path}')</code></i><br>
-        <i>In Jupyter: <a href="{FileLink(csv_path).href}" target="_blank">Download CSV</a></i>
+        <b>✅ Report saved</b><br>
+        Path: {report_path}<br><br>
+        <b>To download:</b> Copy the path above and run in a new cell:<br>
+        <code>from google.colab import files; files.download('{report_path}')</code>
     </div>
     """
-    export_status.value = download_html
-
 
 # ── Wire up events ────────────────────────────────────────────────────
 file_in.observe(handle_upload, names='value')
