@@ -1,7 +1,8 @@
-# prompt6_devsuite.py
 # ═══════════════════════════════════════════════════════════════════════
-# Panel Traction: Dynamic Account Scoring — ipywidgets (V3)
-# Updated for FinScale V2 data with corrected V-A-E mapping
+# Generic Customer Segmentation & Traction Audit (ipywidgets V6)
+# 6 tabs: Upload, Variables, Segmentation, Results, Traction Mapping, Traction Calculation
+# FIXED: Individual row-level traction, transposed centroids, 4-decimal rounding, calc_btn early enable
+# Paste into ONE Jupyter/Colab cell and run
 # ═══════════════════════════════════════════════════════════════════════
 
 # ── Quiet install ─────────────────────────────────────────────────────
@@ -14,316 +15,359 @@ for pkg in ["ipywidgets", "scikit-learn", "pandas", "matplotlib", "seaborn", "IP
 
 # ── Imports ─────────────────────────────────────────────────────────────
 import ipywidgets as widgets
-from IPython.display import display, HTML, clear_output, FileLink
+from IPython.display import display, HTML, clear_output
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from datetime import datetime
 import io
 import warnings
 warnings.filterwarnings('ignore')
 
-# ── Global State ──────────────────────────────────────────────────────────
+# ── Global State ────────────────────────────────────────────────────────
 state = {
     'df_raw': None,
     'df_processed': None,
-    'account_col': None,
-    'period_col': None,
-    'numeric_cols': [],
-    'scored_long': None,
-    'scored_wide': None,
-    'k': 3,
-    'centroids': None,
-    'cluster_sizes': None,
-    'reflection': ""
+    'basis_vars': [],  # Original columns selected by user (before dummy creation)
+    'processed_vars': [],
+    'X_scaled': None,
+    'segment_labels': None,
+    'segment_names': ["Segment 1", "Segment 2", "Segment 3"],
+    'scored_df': None,
+    'wcss': None,
+    'ks': None,
+    'k_value': 3
 }
 
 # ═══════════════════════════════════════════════════════════════════════
-# SECTION 1: UPLOAD & CONFIGURE
+# TAB 1: DATA PREVIEW
 # ═══════════════════════════════════════════════════════════════════════
 
-upload_widget = widgets.FileUpload(
+file_in = widgets.FileUpload(
     accept='.csv',
     multiple=False,
     description='📁 Upload CSV',
     layout=widgets.Layout(width='200px')
 )
 
-upload_status = widgets.HTML(value="<p style='color:#888;'>Upload a panel CSV to begin.</p>")
-preview_area = widgets.Output()
+status = widgets.HTML(value="<p style='color:#888;'>Waiting for CSV upload...</p>")
+preview_output = widgets.Output()
+with preview_output:
+    display(HTML("<p style='color:#888;'>Upload a CSV to see data preview.</p>"))
 
-account_dropdown = widgets.Dropdown(
-    options=['(Upload first)'],
-    value='(Upload first)',
-    description='Account ID:',
-    disabled=True,
-    layout=widgets.Layout(width='300px')
+desc_stats = widgets.Textarea(
+    value="Upload a CSV to see dataset summary.",
+    description='Overview:',
+    layout=widgets.Layout(width='100%', height='250px'),
+    disabled=True
 )
 
-period_dropdown = widgets.Dropdown(
-    options=['(Upload first)'],
-    value='(Upload first)',
-    description='Period:',
-    disabled=True,
-    layout=widgets.Layout(width='300px')
-)
-
-configure_btn = widgets.Button(
-    description='✅ Configure Panel',
-    button_style='primary',
-    disabled=True,
-    layout=widgets.Layout(width='180px')
-)
-
-config_status = widgets.HTML(value="<p>Upload and select fields first.</p>")
-stats_area = widgets.Output()
-
-# ── Upload Handler ────────────────────────────────────────────────────
-
-def on_upload(change):
-    if not upload_widget.value:
-        return
-
-    uploaded = list(upload_widget.value.values())[0]
-    content = uploaded['content']
-
-    try:
-        df = pd.read_csv(io.BytesIO(content))
-        state['df_raw'] = df
-        cols = df.columns.tolist()
-
-        likely_account = [c for c in cols if any(x in c.lower() for x in ['account', 'id', 'tenant', 'customer', 'user'])]
-        likely_period = [c for c in cols if any(x in c.lower() for x in ['period', 'month', 'time', 'week', 'quarter'])]
-
-        account_dropdown.options = cols
-        account_dropdown.value = likely_account[0] if likely_account else cols[0]
-        account_dropdown.disabled = False
-
-        period_dropdown.options = cols
-        period_dropdown.value = likely_period[0] if likely_period else cols[0]
-        period_dropdown.disabled = False
-
-        configure_btn.disabled = False
-
-        upload_status.value = f"<p style='color:green;'>✅ Loaded: <b>{len(df):,}</b> rows × {len(df.columns)} columns</p>"
-
-        with preview_area:
-            clear_output()
-            display(HTML(f"<h4>Data Preview (first 10 rows)</h4>"))
-            display(df.head(10).style.set_properties(**{'font-size': '11px'}).set_table_styles([
-                {'selector': 'th', 'props': [('background-color', '#f5f5f5'), ('font-weight', 'bold')]},
-                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
-            ]))
-
-        n_accounts = df[likely_account[0]].nunique() if likely_account else 'N/A'
-        n_periods = len(df[likely_period[0]].unique()) if likely_period else 'N/A'
-        numeric_count = len(df.select_dtypes(include=[np.number]).columns)
-
-        with stats_area:
-            clear_output()
-            display(HTML(f"""
-            <div style="background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #dee2e6;">
-                <b>Dataset Overview</b><br>
-                • Rows: {len(df):,} | Columns: {len(df.columns)}<br>
-                • Unique accounts: {n_accounts} | Periods: {n_periods}<br>
-                • Numeric columns: {numeric_count}<br><br>
-                <b>All columns:</b><br>
-                {', '.join(cols)}
-            </div>
-            """))
-
-    except Exception as e:
-        upload_status.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
-
-upload_widget.observe(on_upload, names='value')
-
-# ── Configure Handler ─────────────────────────────────────────────────
-
-def on_configure(b):
-    df = state['df_raw']
-    ac = account_dropdown.value
-    pc = period_dropdown.value
-
-    if ac == pc:
-        config_status.value = "<p style='color:red;'>❌ Account and Period must be different.</p>"
-        return
-
-    state['df_processed'] = df
-    state['account_col'] = ac
-    state['period_col'] = pc
-    state['numeric_cols'] = [c for c in df.columns if c not in [ac, pc] and pd.api.types.is_numeric_dtype(df[c])]
-
-    if len(state['numeric_cols']) < 2:
-        config_status.value = "<p style='color:red;'>❌ Need at least 2 numeric variables.</p>"
-        return
-
-    config_status.value = f"<p style='color:green;'>✅ Panel configured: <b>{df[ac].nunique():,}</b> accounts × <b>{df[pc].nunique()}</b> periods. <b>{len(state['numeric_cols'])}</b> numeric variables.</p>"
-
-    update_mapping_tab()
-    tabs.selected_index = 1
-
-configure_btn.on_click(on_configure)
-
-upload_section = widgets.VBox([
-    widgets.HTML("<h2>📁 Section 1: Upload & Configure</h2>"),
-    widgets.HBox([upload_widget, upload_status]),
-    preview_area,
-    widgets.HBox([account_dropdown, period_dropdown, configure_btn]),
-    config_status,
-    stats_area
+tab1 = widgets.VBox([
+    widgets.HTML("<h2>📁 Data Preview</h2>"),
+    widgets.HBox([file_in, status]),
+    widgets.HTML("<h4>Raw Data Preview</h4>"),
+    preview_output,
+    widgets.HTML("<h4>Dataset Overview</h4>"),
+    desc_stats
 ])
 
 # ═══════════════════════════════════════════════════════════════════════
-# SECTION 2: MAP TRACTION COMPONENTS
+# TAB 2: VARIABLE SELECTION
 # ═══════════════════════════════════════════════════════════════════════
 
-mapping_status = widgets.HTML(value="<p>Configure panel in Section 1 first.</p>")
+basis_check = widgets.SelectMultiple(
+    options=['(Upload CSV first)'],
+    value=(),
+    description='Basis vars:',
+    rows=8,
+    layout=widgets.Layout(width='350px'),
+    disabled=True
+)
 
-# Variable architecture guidance - updated for FinScale V2
-var_guidance = widgets.HTML(value="""
-<div style="background:#fff3cd; padding:10px; border-radius:6px; border-left:4px solid #ffc107; margin-bottom:10px;">
-<b>💡 V-A-E Variable Architecture (FinScale V2)</b><br><br>
-<b>Value</b> (Product features customer experiences):<br>
-• <code>credit_limit_inr</code> — structural credit line<br>
-• <code>plan_tier</code> — Basic/Pro/Enterprise benefits<br>
-• <code>card_plastic_variant</code> — Classic/Premium/Elite prestige<br>
-• <code>departmental_card_span</code> — embedding depth (# departments using cards)<br><br>
-<b>Access</b> (Acquisition efficiency & friction):<br>
-• <code>acquisition_channel</code> — Performance Ads / Founder Referral / Outbound Sales<br>
-• <code>marketing_promo_coupon_code</code> — WELCOME50 / STARTUP100 / REFER50 / NONE<br>
-• <code>onboarding_device_type</code> — Mobile / Desktop / Tablet<br><br>
-<b>Evidence</b> (Behavioral proof of value realization):<br>
-• <code>monthly_transaction_count</code> — usage velocity<br>
-• <code>monthly_spend_volume_inr</code> — spend depth<br>
-• <code>credit_utilization_ratio</code> — credit engagement<br>
-• <code>average_settlement_delay_days</code> — payment discipline (lower = better)<br>
-• <code>late_payment_flag</code> — 0/1 delinquency signal<br>
-• <code>active_flag</code> — 0/1 retention signal<br>
-• <code>monthly_active_days</code> — engagement breadth<br><br>
-<b>Noise</b> (NOT in any traction bucket):<br>
-• <code>company_size_employees</code> — firm characteristic (not product feature)<br>
-• <code>tenure_months_at_onboarding</code> — structural firm age<br>
-• <code>industry_vertical</code> — sector classification<br>
-• <code>customer_support_tickets</code> — post-hoc operational noise<br>
-• <code>app_session_duration_minutes</code> — engagement noise<br>
-• <code>referral_attempts_count</code> — viral noise<br><br>
-<i><b>⚠️ Tip:</b> Only map variables to ONE component. If a variable fits multiple, pick the best fit and note it in your reflection.</i>
-</div>
-""")
+cat_check = widgets.SelectMultiple(
+    options=['(Select basis variables first)'],
+    value=(),
+    description='Categorical:',
+    rows=8,
+    layout=widgets.Layout(width='350px'),
+    disabled=True
+)
+
+summary = widgets.Textarea(
+    value="Upload CSV and select variables to see summary.",
+    description='Summary:',
+    layout=widgets.Layout(width='100%', height='300px'),
+    disabled=True
+)
+
+confirm_btn = widgets.Button(
+    description='✅ Confirm & Create Dummies',
+    button_style='primary',
+    layout=widgets.Layout(width='220px'),
+    disabled=True
+)
+
+confirm_status = widgets.HTML(value="<p>Select variables and click Confirm to prepare data.</p>")
+
+tab2 = widgets.VBox([
+    widgets.HTML("<h2>🔧 Variable Selection</h2>"),
+    widgets.HTML("<h3>Configure Variables for Clustering</h3>"),
+    widgets.HTML("<p><b>Step A:</b> Select basis variables to include in the analysis.</p>"),
+    widgets.HBox([basis_check, widgets.VBox([
+        widgets.HTML("<p><b>Step B:</b> From selected basis variables, check those needing dummy encoding.</p>"),
+        cat_check
+    ])]),
+    widgets.HTML("<h4>Variable Summary</h4>"),
+    summary,
+    widgets.HBox([confirm_btn, confirm_status])
+])
+
+# ═══════════════════════════════════════════════════════════════════════
+# TAB 3: SEGMENTATION
+# ═══════════════════════════════════════════════════════════════════════
+
+scree_output = widgets.Output()
+with scree_output:
+    display(HTML("<p style='color:#888;'>Confirm variables in Tab 2 first to see scree plot.</p>"))
+
+wcss_output = widgets.Output()
+with wcss_output:
+    display(HTML("<p style='color:#888;'>WCSS table will appear after confirming variables.</p>"))
+
+k_slider = widgets.IntSlider(value=3, min=2, max=10, step=1, description='K:', layout=widgets.Layout(width='300px'))
+
+run_btn = widgets.Button(
+    description='▶️ Run Segmentation',
+    button_style='success',
+    layout=widgets.Layout(width='180px'),
+    disabled=True
+)
+
+seg_status = widgets.HTML(value="<p>Confirm variables in Tab 2 first.</p>")
+
+tab3 = widgets.VBox([
+    widgets.HTML("<h2>🎯 Segmentation</h2>"),
+    widgets.HTML("<h3>K-Means Clustering</h3>"),
+    widgets.HTML("<p><b>Step 1:</b> Review the scree plot below. The elbow suggests optimal K.</p>"),
+    widgets.HBox([scree_output, widgets.VBox([
+        widgets.HTML("<p><b>WCSS Values</b></p>"),
+        wcss_output
+    ])]),
+    widgets.HTML("<p><b>Step 2:</b> Choose K and run segmentation.</p>"),
+    widgets.HBox([k_slider, run_btn, seg_status])
+])
+
+# ═══════════════════════════════════════════════════════════════════════
+# TAB 4: RESULTS + SEGMENT NAMING
+# ═══════════════════════════════════════════════════════════════════════
+
+segment_names_input = widgets.Textarea(
+    value='Segment 1, Segment 2, Segment 3',
+    description='Names:',
+    layout=widgets.Layout(width='400px', height='60px')
+)
+
+apply_names_btn = widgets.Button(
+    description='✏️ Apply Names',
+    button_style='info',
+    layout=widgets.Layout(width='120px'),
+    disabled=True
+)
+
+names_status = widgets.HTML(value="<p>Run segmentation first, then name your segments.</p>")
+
+sizes_output = widgets.Output()
+with sizes_output:
+    display(HTML("<p style='color:#888;'>Run segmentation in Tab 3 to see segment sizes.</p>"))
+
+cents_output = widgets.Output()
+with cents_output:
+    display(HTML("<p style='color:#888;'>Run segmentation in Tab 3 to see centroids.</p>"))
+
+scatter_output = widgets.Output()
+with scatter_output:
+    display(HTML("<p style='color:#888;'>Run segmentation in Tab 3 to see PCA scatter.</p>"))
+
+labeled_output = widgets.Output()
+with labeled_output:
+    display(HTML("<p style='color:#888;'>Run segmentation in Tab 3 to see labeled data.</p>"))
+
+tab4 = widgets.VBox([
+    widgets.HTML("<h2>📊 Results</h2>"),
+    widgets.HTML("<h3>Segmentation Results</h3>"),
+    widgets.HTML("<h4>Name Your Segments</h4>"),
+    widgets.HTML("<p><i>Enter custom names below (comma-separated, in order). Default: Segment 1, Segment 2, ...</i></p>"),
+    widgets.HBox([segment_names_input, apply_names_btn, names_status]),
+    widgets.HTML("<h4>Segment Sizes & Centroids</h4>"),
+    widgets.HBox([sizes_output, cents_output]),
+    widgets.HTML("<h4>PCA Scatter Plot</h4>"),
+    scatter_output,
+    widgets.HTML("<h4>Segmented Data Preview</h4>"),
+    labeled_output
+])
+
+# ═══════════════════════════════════════════════════════════════════════
+# TAB 5: TRACTION MAPPING + REFLECTION (FIXED: reflection moved here)
+# ═══════════════════════════════════════════════════════════════════════
 
 value_check = widgets.SelectMultiple(
-    options=[],
+    options=['(Run segmentation first)'],
+    value=(),
     description='Value:',
     rows=6,
-    layout=widgets.Layout(width='250px')
-)
-access_check = widgets.SelectMultiple(
-    options=[],
-    description='Access:',
-    rows=6,
-    layout=widgets.Layout(width='250px')
-)
-evidence_check = widgets.SelectMultiple(
-    options=[],
-    description='Evidence:',
-    rows=6,
-    layout=widgets.Layout(width='250px')
+    layout=widgets.Layout(width='250px'),
+    disabled=True
 )
 
+access_check = widgets.SelectMultiple(
+    options=['(Run segmentation first)'],
+    value=(),
+    description='Access:',
+    rows=6,
+    layout=widgets.Layout(width='250px'),
+    disabled=True
+)
+
+evidence_check = widgets.SelectMultiple(
+    options=['(Run segmentation first)'],
+    value=(),
+    description='Evidence:',
+    rows=6,
+    layout=widgets.Layout(width='250px'),
+    disabled=True
+)
+
+# Reflection moved to Tab 5
 reflection_box = widgets.Textarea(
     value='',
-    placeholder='Reflect on your mapping...',
+    placeholder='Why did you map these specific variables to Value/Access/Evidence? What trade-offs did you consider?',
     description='Reflection:',
-    layout=widgets.Layout(width='500px', height='80px')
+    layout=widgets.Layout(width='100%', height='120px')
 )
 
 weight_editor = widgets.Textarea(
     value='',
     placeholder='variable=Component:weight (one per line)',
     description='Weights:',
-    layout=widgets.Layout(width='500px', height='120px')
+    layout=widgets.Layout(width='500px', height='150px')
 )
 
-clear_weights_btn = widgets.Button(description='🔄 Clear All', button_style='warning', layout=widgets.Layout(width='100px'))
-compute_btn = widgets.Button(description='📊 Compute & Cluster', button_style='success', layout=widgets.Layout(width='180px'))
-compute_btn.disabled = True
+clear_weights_btn = widgets.Button(
+    description='🔄 Clear All',
+    button_style='warning',
+    layout=widgets.Layout(width='100px')
+)
 
-def update_mapping_tab():
-    cols = state['numeric_cols']
-    value_check.options = cols
-    access_check.options = cols
-    evidence_check.options = cols
-    mapping_status.value = f"<p style='color:green;'>✅ <b>{len(cols)}</b> numeric variables available. Select variables for each component.</p>"
-    compute_btn.disabled = False
+mapping_status = widgets.HTML(value="<p>Run segmentation first, then select variables and set weights.</p>")
 
-def build_weights_text(*args):
-    lines = []
-    for v in value_check.value:
-        lines.append(f"{v}=Value:1.0")
-    for v in access_check.value:
-        lines.append(f"{v}=Access:1.0")
-    for v in evidence_check.value:
-        lines.append(f"{v}=Evidence:1.0")
-    weight_editor.value = "\n".join(lines)
-
-def on_clear_weights(b):
-    value_check.value = ()
-    access_check.value = ()
-    evidence_check.value = ()
-    weight_editor.value = ''
-
-value_check.observe(build_weights_text, names='value')
-access_check.observe(build_weights_text, names='value')
-evidence_check.observe(build_weights_text, names='value')
-clear_weights_btn.on_click(on_clear_weights)
-
-mapping_section = widgets.VBox([
-    widgets.HTML("<h2>🔧 Section 2: Map Traction Components</h2>"),
-    var_guidance,
-    widgets.HTML("<p><b>Step 1:</b> Select variables for Value (product features), Access (acquisition), Evidence (behavioral).</p>"),
+tab5 = widgets.VBox([
+    widgets.HTML("<h2>🔧 Mapping Traction Components</h2>"),
+    widgets.HTML("""
+    <p><b>Step 1:</b> Check variables for each component. <b>Step 2:</b> Reflect on your mapping choices.
+    <b>Step 3:</b> Set weights (0–1+). Weight = 0 excludes the variable. Weight > 0 includes it proportionally.</p>
+    """),
+    widgets.HTML("<p><b>Step 1: Select Variables per Component</b></p>"),
     widgets.HBox([value_check, access_check, evidence_check]),
-    widgets.HTML("<p><b>Step 2:</b> Reflect on your mapping. Which variables were ambiguous? Did you force any into a bucket?</p>"),
+    widgets.HTML("<p><b>Step 2: 📝 Reflect on Your Mapping</b></p>"),
+    widgets.HTML("<p><i>Why did you map these specific variables to Value/Access/Evidence? What trade-offs did you consider?</i></p>"),
     reflection_box,
-    widgets.HTML("<p><b>Step 3:</b> Review auto-generated weights (edit if needed). Format: <code>variable=Component:weight</code></p>"),
-    widgets.HBox([weight_editor, widgets.VBox([clear_weights_btn, compute_btn])]),
+    widgets.HTML("<p><b>Step 3: Set Weights for Selected Variables</b></p>"),
+    widgets.HTML("<p><i>Format: <code>variable_name=Component:weight</code> one per line. Auto-populates from selections above with default weight=1.</i></p>"),
+    widgets.HBox([weight_editor, widgets.VBox([clear_weights_btn])]),
     mapping_status
 ])
 
 # ═══════════════════════════════════════════════════════════════════════
-# SECTION 3: TRACTION OVER TIME
+# TAB 6: TRACTION CALCULATION + INDIVIDUAL SCORING + EXPORT
 # ═══════════════════════════════════════════════════════════════════════
 
-k_slider = widgets.IntSlider(value=3, min=2, max=6, step=1, description='Clusters K:', layout=widgets.Layout(width='300px'))
-view_dropdown = widgets.Dropdown(
-    options=['Cluster Means', 'Full Sample'],
-    value='Cluster Means',
-    description='View:',
-    layout=widgets.Layout(width='200px')
-)
-account_dropdown_view = widgets.Dropdown(
-    options=['(None)'],
-    value='(None)',
-    description='Account:',
-    layout=widgets.Layout(width='200px')
+calc_btn = widgets.Button(
+    description='📊 Calculate Traction Quotient',
+    button_style='success',
+    layout=widgets.Layout(width='220px'),
+    disabled=True
 )
 
-results_status = widgets.HTML(value="<p>Map variables in Section 2, then click Compute.</p>")
-scree_output = widgets.Output()
-centroids_output = widgets.Output()
-trajectory_output = widgets.Output()
-summary_output = widgets.Output()
+traction_status = widgets.HTML(value="<p>Configure mapping in Tab 5, then click Calculate.</p>")
 
-# Download outputs
-download_area = widgets.Output()
+overall_output = widgets.Output()
+with overall_output:
+    display(HTML("<p style='color:#888;'>Overall sample traction will appear after calculation.</p>"))
 
-export_wide_btn = widgets.Button(description='📊 Wide CSV', button_style='info', layout=widgets.Layout(width='120px'))
-export_long_btn = widgets.Button(description='📊 Long CSV', button_style='info', layout=widgets.Layout(width='120px'))
-export_report_btn = widgets.Button(description='📄 Report TXT', button_style='info', layout=widgets.Layout(width='120px'))
-export_status = widgets.HTML(value="")
+segment_output = widgets.Output()
+with segment_output:
+    display(HTML("<p style='color:#888;'>Segment-wise traction will appear after calculation.</p>"))
 
-# ── Parse Weights ─────────────────────────────────────────────────────
+ranking_txt = widgets.Textarea(
+    value='',
+    description='Rankings:',
+    layout=widgets.Layout(width='100%', height='200px'),
+    disabled=True
+)
+
+# Individual scoring section
+individual_output = widgets.Output()
+with individual_output:
+    display(HTML("<p style='color:#888;'>Individual-level scores will appear after calculation.</p>"))
+
+traction_hist_output = widgets.Output()
+with traction_hist_output:
+    display(HTML("<p style='color:#888;'>Traction score distribution histogram will appear after calculation.</p>"))
+
+export_report_btn = widgets.Button(
+    description='📄 Download Report (TXT)',
+    button_style='info',
+    layout=widgets.Layout(width='180px'),
+    disabled=True
+)
+
+export_csv_btn = widgets.Button(
+    description='📊 Download Scored Data (CSV)',
+    button_style='info',
+    layout=widgets.Layout(width='200px'),
+    disabled=True
+)
+
+export_status = widgets.HTML(value="<p>Calculate traction, then export.</p>")
+
+tab6 = widgets.VBox([
+    widgets.HTML("<h2>📊 Traction Calculation</h2>"),
+    widgets.HTML("<h3>Traction Results</h3>"),
+    widgets.HTML("<p><b>Overall Sample</b> (K=1, no clustering) vs <b>Segment-wise</b> (your named segments) + <b>Individual-level</b> scoring</p>"),
+    widgets.HBox([calc_btn, traction_status]),
+    widgets.HTML("<h4>Overall Sample (K=1 Baseline)</h4>"),
+    overall_output,
+    widgets.HTML("<h4>Segment-wise Traction (Transposed for AI Copy-Paste)</h4>"),
+    segment_output,
+    widgets.HTML("<h4>Segment Rankings</h4>"),
+    ranking_txt,
+    widgets.HTML("<h4>👤 Individual-Level Traction Scores</h4>"),
+    widgets.HTML("<p><i>Each row gets its own Value, Access, Evidence, and Traction score.</i></p>"),
+    individual_output,
+    widgets.HTML("<h4>Traction Score Distribution by Segment</h4>"),
+    traction_hist_output,
+    widgets.HTML("<h4>📥 Export</h4>"),
+    widgets.HBox([export_report_btn, export_csv_btn, export_status])
+])
+
+# ═══════════════════════════════════════════════════════════════════════
+# ASSEMBLE TABS
+# ═══════════════════════════════════════════════════════════════════════
+
+tabs = widgets.Tab(children=[tab1, tab2, tab3, tab4, tab5, tab6])
+tabs.set_title(0, '📁 Data Preview')
+tabs.set_title(1, '🔧 Variable Selection')
+tabs.set_title(2, '🎯 Segmentation')
+tabs.set_title(3, '📊 Results')
+tabs.set_title(4, '🔧 Traction Mapping')
+tabs.set_title(5, '📊 Traction Calculation')
+
+# ═══════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════
 
 def parse_weights(weight_text):
     weights = {}
@@ -346,23 +390,430 @@ def parse_weights(weight_text):
                     weights[var][comp] = w
     return weights
 
-# ── Compute Handler ───────────────────────────────────────────────────
+def build_weight_text(value_vars, access_vars, evidence_vars):
+    lines = []
+    all_vars = set((value_vars or []) + (access_vars or []) + (evidence_vars or []))
+    for var in sorted(all_vars):
+        if value_vars and var in value_vars:
+            lines.append(f"{var}=Value:1.0")
+        if access_vars and var in access_vars:
+            lines.append(f"{var}=Access:1.0")
+        if evidence_vars and var in evidence_vars:
+            lines.append(f"{var}=Evidence:1.0")
+    return "\n".join(lines)
 
-def on_compute(b):
-    df = state['df_processed']
-    ac = state['account_col']
-    pc = state['period_col']
-    weight_text = weight_editor.value
+def parse_segment_names(names_text, k):
+    if not names_text:
+        return [f"Segment {i+1}" for i in range(k)]
+    names = [n.strip() for n in names_text.split(",")]
+    while len(names) < k:
+        names.append(f"Segment {len(names)+1}")
+    return names[:k]
+
+# ═══════════════════════════════════════════════════════════════════════
+# CALLBACKS
+# ═══════════════════════════════════════════════════════════════════════
+
+def handle_upload(change):
+    global state
+    if not file_in.value:
+        return
+    try:
+        uploaded = list(file_in.value.values())[0]
+        content = uploaded['content']
+        df = pd.read_csv(io.BytesIO(content))
+        state['df_raw'] = df
+        all_cols = df.columns.tolist()
+
+        html = df.head(10).to_html(index=False, border=0, max_rows=10)
+        styled_html = f"""
+        <div style="overflow-x:auto; max-width:100%; border:1px solid #ddd; border-radius:4px;">
+            <style>
+                .table {{ font-family: 'Courier New', monospace; font-size: 12px; border-collapse: collapse; }}
+                .table th {{ background-color: #f5f5f5; padding: 8px 12px; text-align: left; border-bottom: 2px solid #ddd; white-space: nowrap; }}
+                .table td {{ padding: 6px 12px; border-bottom: 1px solid #eee; white-space: nowrap; }}
+                .table tr:hover {{ background-color: #f9f9f9; }}
+            </style>
+            {html}
+        </div>
+        """
+
+        with preview_output:
+            clear_output()
+            display(HTML("<h4>Raw Data Preview (first 10 rows)</h4>"))
+            display(HTML(styled_html))
+
+        stats_lines = [
+            f"📊 Rows: {len(df):,}",
+            f"📊 Columns: {len(df.columns)}",
+            f"📊 Numeric: {len(df.select_dtypes(include=[np.number]).columns)}",
+            f"📊 Categorical/object: {len(df.select_dtypes(include=['object', 'category']).columns)}",
+            f"📊 Missing: {df.isnull().sum().sum():,} ({100*df.isnull().sum().sum()/(df.shape[0]*df.shape[1]):.1f}%)",
+            "",
+            "Column breakdown:"
+        ]
+        for col in all_cols:
+            dtype = str(df[col].dtype)
+            n_unique = df[col].nunique()
+            n_missing = df[col].isnull().sum()
+            stats_lines.append(f"  • {col}: {dtype} | {n_unique} unique | {n_missing} missing")
+
+        desc_stats.value = "\n".join(stats_lines)
+        status.value = f"<p style='color:green;'>✅ Loaded: <b>{len(df):,}</b> rows × {len(df.columns)} columns</p>"
+
+        basis_check.options = all_cols
+        basis_check.value = ()
+        basis_check.disabled = False
+
+        cat_check.options = ['(Select basis variables first)']
+        cat_check.value = ()
+        cat_check.disabled = True
+
+        summary.value = "Upload CSV and select basis variables."
+        confirm_status.value = "<p>Select variables and click Confirm to prepare data.</p>"
+        confirm_btn.disabled = True
+        run_btn.disabled = True
+        seg_status.value = "<p>Confirm variables in Tab 2 first.</p>"
+
+        with scree_output:
+            clear_output()
+            display(HTML("<p style='color:#888;'>Confirm variables in Tab 2 first to see scree plot.</p>"))
+        with wcss_output:
+            clear_output()
+            display(HTML("<p style='color:#888;'>WCSS table will appear after confirming variables.</p>"))
+
+        apply_names_btn.disabled = True
+        names_status.value = "<p>Run segmentation first, then name your segments.</p>"
+        value_check.options = ['(Run segmentation first)']
+        value_check.value = ()
+        value_check.disabled = True
+        access_check.options = ['(Run segmentation first)']
+        access_check.value = ()
+        access_check.disabled = True
+        evidence_check.options = ['(Run segmentation first)']
+        evidence_check.value = ()
+        evidence_check.disabled = True
+        weight_editor.value = ''
+        mapping_status.value = "<p>Run segmentation first, then select variables and set weights.</p>"
+        calc_btn.disabled = True
+        traction_status.value = "<p>Configure mapping in Tab 5, then click Calculate.</p>"
+        export_report_btn.disabled = True
+        export_csv_btn.disabled = True
+        export_status.value = "<p>Calculate traction, then export.</p>"
+
+    except Exception as e:
+        status.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
+        with preview_output:
+            clear_output()
+            display(HTML(f"<p style='color:red;'>Error: {str(e)}</p>"))
+
+def handle_basis_change(change):
+    global state
+    if state['df_raw'] is None:
+        return
+    selected_basis = list(basis_check.value)
+    if not selected_basis:
+        cat_check.options = ['(Select basis variables first)']
+        cat_check.value = ()
+        cat_check.disabled = True
+        summary.value = "Upload CSV and select basis variables."
+        confirm_btn.disabled = True
+        return
+    cat_check.options = selected_basis
+    cat_check.value = ()
+    cat_check.disabled = False
+    confirm_btn.disabled = False
+    lines = [f"📊 Basis variables: {len(selected_basis)}"]
+    for v in selected_basis:
+        dtype = str(state['df_raw'][v].dtype)
+        n_unique = state['df_raw'][v].nunique()
+        lines.append(f"  • {v}: {dtype} | {n_unique} unique values")
+    summary.value = "\n".join(lines)
+
+def handle_cat_change(change):
+    global state
+    if state['df_raw'] is None:
+        return
+    selected_basis = list(basis_check.value)
+    selected_cat = list(cat_check.value)
+    if not selected_basis:
+        summary.value = "Upload CSV and select basis variables."
+        return
+    numeric_vars = [v for v in selected_basis if v not in selected_cat]
+    lines = [
+        f"📊 Basis variables: {len(selected_basis)}",
+        f"🔤 Categorical (dummy): {len(selected_cat)}",
+        f"🔢 Numeric (direct): {len(numeric_vars)}",
+        "",
+        "Final variable list:"
+    ]
+    for v in selected_basis:
+        marker = "🔤" if v in selected_cat else "🔢"
+        dtype = str(state['df_raw'][v].dtype)
+        lines.append(f"  {marker} {v} ({dtype})")
+    if selected_cat:
+        lines.append("")
+        lines.append("Dummy variables to create (n-1, first category as base):")
+        for v in selected_cat:
+            n_cats = state['df_raw'][v].nunique()
+            lines.append(f"  • {v}: {n_cats} categories → {n_cats - 1} dummies")
+    summary.value = "\n".join(lines)
+
+def handle_confirm(b):
+    global state
+    df = state['df_raw']
+    selected_basis = list(basis_check.value)
+    selected_cat = list(cat_check.value)
+    if df is None or not selected_basis:
+        confirm_status.value = "<p style='color:red;'>❌ Please select basis variables first.</p>"
+        return
+    try:
+        df_proc = df[selected_basis].copy()
+        df_proc = df_proc.dropna()
+        if len(df_proc) < 2:
+            confirm_status.value = "<p style='color:red;'>❌ Not enough valid rows after dropping missing values.</p>"
+            return
+        for col in selected_cat:
+            if col in df_proc.columns:
+                dummies = pd.get_dummies(df_proc[col], prefix=col, drop_first=True)
+                dummies = dummies.astype(int)
+                df_proc = pd.concat([df_proc.drop(columns=[col]), dummies], axis=1)
+        non_numeric = df_proc.select_dtypes(exclude=[np.number]).columns.tolist()
+        if non_numeric:
+            confirm_status.value = f"<p style='color:red;'>❌ Non-numeric columns remain: {non_numeric}</p>"
+            return
+        final_cols = df_proc.columns.tolist()
+        state['df_processed'] = df_proc
+        state['basis_vars'] = selected_basis  # Store original columns for traction mapping
+        state['processed_vars'] = final_cols
+
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(df_proc.values)
+        state['X_scaled'] = X_scaled
+
+        wcss = []
+        ks = range(1, min(11, len(X_scaled)))
+        for k in ks:
+            km = KMeans(n_clusters=k, random_state=42, n_init=10)
+            km.fit(X_scaled)
+            wcss.append(km.inertia_)
+        state['wcss'] = wcss
+        state['ks'] = list(ks)
+
+        fig, ax = plt.subplots(figsize=(9, 5))
+        ax.plot(list(ks), wcss, 'o-', linewidth=2.5, markersize=9, color='#2E86AB')
+        for i in range(1, len(wcss)):
+            pct_drop = (wcss[i-1] - wcss[i]) / wcss[i-1] * 100
+            ax.annotate(f"{pct_drop:.1f}%", xy=(i+1, wcss[i]), xytext=(5, 10),
+                       textcoords='offset points', fontsize=8, color='#555', alpha=0.8)
+        if len(wcss) > 2:
+            drops = [(wcss[i-1] - wcss[i]) / wcss[i-1] * 100 for i in range(1, len(wcss))]
+            best_k = drops.index(max(drops)) + 2
+            ax.axvline(x=best_k, color='red', linestyle='--', alpha=0.5, label=f'Suggested K={best_k}')
+            ax.legend()
+        ax.set_xlabel('K (Number of Segments)', fontsize=12)
+        ax.set_ylabel('WCSS (Standardized Data)', fontsize=12)
+        ax.set_title('Scree Plot with % Drop Annotations', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        ax.set_xticks(list(ks))
+        plt.tight_layout()
+
+        with scree_output:
+            clear_output()
+            display(fig)
+        plt.close(fig)
+
+        wcss_df = pd.DataFrame({"K": list(ks), "WCSS": [round(w, 4) for w in wcss]})
+        pct_drops = [None] + [round((wcss[i-1] - wcss[i]) / wcss[i-1] * 100, 4) for i in range(1, len(wcss))]
+        wcss_df["Pct_Drop"] = pct_drops
+
+        with wcss_output:
+            clear_output()
+            display(HTML("<p><b>WCSS Values</b></p>"))
+            display(wcss_df.style.set_properties(**{'font-size': '11px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
+
+        confirm_status.value = f"<p style='color:green;'>✅ Standardized & dummies ready! <b>{len(df_proc):,}</b> rows × <b>{len(final_cols)}</b> columns.</p>"
+        run_btn.disabled = False
+        seg_status.value = "<p>Ready to run segmentation. Choose K and click Run.</p>"
+        tabs.selected_index = 2
+    except Exception as e:
+        confirm_status.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
+
+def handle_run(b):
+    global state
+    df_proc = state['df_processed']
+    X_scaled = state['X_scaled']
+    processed_cols = state['processed_vars']
     k = k_slider.value
-    state['reflection'] = reflection_box.value
+    state['k_value'] = k
 
-    if df is None:
-        results_status.value = "<p style='color:red;'>❌ Configure panel first.</p>"
+    if df_proc is None or X_scaled is None:
+        seg_status.value = "<p style='color:red;'>❌ Confirm variables in Tab 2 first.</p>"
+        return
+    if len(X_scaled) < k:
+        seg_status.value = f"<p style='color:red;'>❌ Need ≥{k} rows for K={k}.</p>"
+        return
+    try:
+        km = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = km.fit_predict(X_scaled)
+        state['segment_labels'] = labels
+
+        default_names = [f"Segment {i+1}" for i in range(k)]
+        state['segment_names'] = default_names
+        segment_names_input.value = ", ".join(default_names)
+
+        # Enable calc_btn IMMEDIATELY after successful segmentation (before any display)
+        calc_btn.disabled = False
+
+        # Transposed centroids — 4 decimal rounding
+        cents = pd.DataFrame(
+            np.round(km.cluster_centers_, 4).T,
+            index=processed_cols,
+            columns=default_names
+        )
+        cents.index.name = "Variable"
+        cents = cents.reset_index()
+
+        sizes = pd.Series(labels).value_counts().sort_index()
+        sizes_df = pd.DataFrame({
+            "Segment": [default_names[i] for i in sizes.index],
+            "Count": sizes.values,
+            "Pct": (sizes.values / len(labels) * 100).round(4)
+        })
+
+        pca = PCA(n_components=2)
+        Xp = pca.fit_transform(X_scaled)
+
+        fig, ax = plt.subplots(figsize=(9, 6))
+        colors = plt.cm.Set2(np.linspace(0, 1, k))
+        for i in range(k):
+            mask = labels == i
+            ax.scatter(Xp[mask, 0], Xp[mask, 1], c=[colors[i]],
+                       label=default_names[i], alpha=0.7, s=80,
+                       edgecolors='white', linewidth=0.5)
+        ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%})", fontsize=11)
+        ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%})", fontsize=11)
+        ax.set_title("Segment Scatter Plot (PCA of Standardized Data)", fontsize=14, fontweight='bold')
+        ax.legend(title="Segments", loc='best', framealpha=0.9)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+
+        with scatter_output:
+            clear_output()
+            display(fig)
+        plt.close(fig)
+
+        with sizes_output:
+            clear_output()
+            display(HTML("<h4>Segment Sizes</h4>"))
+            display(sizes_df.style.set_properties(**{'font-size': '11px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
+
+        with cents_output:
+            clear_output()
+            display(HTML("<h4>Centroids (Standardized Scale, 4 decimals) — Transposed</h4>"))
+            display(HTML("<p><i>Variables as rows, Segments as columns. Download CSV below for easy copy-paste into AI queries.</i></p>"))
+            display(cents.style.set_properties(**{'font-size': '10px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
+            # Downloadable CSV for copy-paste
+            cents_csv_path = "/tmp/centroids.csv"
+            cents.to_csv(cents_csv_path, index=False)
+            display(HTML(f"<p>📥 <b>Centroids CSV saved:</b> {cents_csv_path} — Run <code>from google.colab import files; files.download('{cents_csv_path}')</code> to download</p>"))
+
+        result_df = df_proc.copy()
+        result_df["Segment"] = [default_names[l] for l in labels]
+
+        with labeled_output:
+            clear_output()
+            display(HTML(f"<h4>Segmented Data Preview (showing {min(20, len(result_df))} of {len(result_df)} rows)</h4>"))
+            display(result_df.head(20).style.set_properties(**{'font-size': '10px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
+
+        seg_status.value = f"<p style='color:green;'>✅ K-Means complete! <b>{k}</b> segments. Name them in Tab 4.</p>"
+        apply_names_btn.disabled = False
+        names_status.value = "<p>Name your segments and click Apply Names.</p>"
+
+        # Enable traction mapping with ORIGINAL basis variables (not processed/dummy cols)
+        basis_vars = state.get('basis_vars', processed_cols)
+        value_check.options = basis_vars
+        value_check.value = ()
+        value_check.disabled = False
+        access_check.options = basis_vars
+        access_check.value = ()
+        access_check.disabled = False
+        evidence_check.options = basis_vars
+        evidence_check.value = ()
+        evidence_check.disabled = False
+        mapping_status.value = "<p>Select variables for each component. Weights auto-populate from selections.</p>"
+
+        tabs.selected_index = 3
+    except Exception as e:
+        seg_status.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
+
+def handle_apply_names(b):
+    global state
+    k = state['k_value']
+    labels = state['segment_labels']
+    df_proc = state['df_processed']
+    names_text = segment_names_input.value
+    names = parse_segment_names(names_text, k)
+    state['segment_names'] = names
+
+    if df_proc is not None and labels is not None:
+        result_df = df_proc.copy()
+        result_df["Segment"] = [names[l] for l in labels]
+
+        with labeled_output:
+            clear_output()
+            display(HTML(f"<h4>Segmented Data Preview (showing {min(20, len(result_df))} of {len(result_df)} rows)</h4>"))
+            display(result_df.head(20).style.set_properties(**{'font-size': '10px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
+
+    names_status.value = f"<p style='color:green;'>✅ Names applied: {', '.join(names)}</p>"
+
+def update_weight_editor(change):
+    global state
+    processed_cols = state['processed_vars']
+    if not processed_cols:
+        return
+    value_vars = list(value_check.value)
+    access_vars = list(access_check.value)
+    evidence_vars = list(evidence_check.value)
+    weight_editor.value = build_weight_text(value_vars, access_vars, evidence_vars)
+
+def handle_clear_weights(b):
+    global state
+    weight_editor.value = ''
+    value_check.value = ()
+    access_check.value = ()
+    evidence_check.value = ()
+
+def handle_traction(b):
+    global state
+    df_proc = state['df_processed']
+    labels = state['segment_labels']
+    segment_names = state['segment_names']
+    weight_text = weight_editor.value
+    df_raw = state['df_raw']
+
+    if df_proc is None:
+        traction_status.value = "<p style='color:red;'>❌ Run segmentation in Tab 3 first.</p>"
         return
 
     weights = parse_weights(weight_text)
     if not weights:
-        results_status.value = "<p style='color:red;'>❌ Set weights first.</p>"
+        traction_status.value = "<p style='color:red;'>❌ Set weights in Tab 5 first. Check variables and assign weights.</p>"
         return
 
     value_vars = [v for v, w in weights.items() if w.get("Value", 0) > 0]
@@ -370,345 +821,360 @@ def on_compute(b):
     evidence_vars = [v for v, w in weights.items() if w.get("Evidence", 0) > 0]
 
     if not value_vars or not access_vars or not evidence_vars:
-        results_status.value = "<p style='color:red;'>❌ Each component needs at least one variable.</p>"
+        traction_status.value = "<p style='color:red;'>❌ Each component needs at least one variable with weight > 0.</p>"
         return
 
-    # Normalize
-    numeric_cols = state['numeric_cols']
-    df_norm = df.copy()
-    for col in numeric_cols:
-        col_min = df[col].min()
-        col_max = df[col].max()
-        if col_max > col_min:
-            df_norm[col] = (df[col] - col_min) / (col_max - col_min)
+    try:
+        analysis_df = df_proc.copy()
+        if labels is not None:
+            analysis_df["Segment"] = [segment_names[l] for l in labels]
         else:
-            df_norm[col] = 0.5
+            analysis_df["Segment"] = "Overall"
 
-    # Score
-    def score_row(row):
-        v_num = sum(row[v] * weights[v]["Value"] for v in value_vars)
-        v_den = sum(weights[v]["Value"] for v in value_vars)
-        v_score = v_num / v_den if v_den > 0 else 0
+        # Min-max normalize only numeric columns (exclude Segment)
+        numeric_cols = [c for c in analysis_df.columns if c != "Segment" and pd.api.types.is_numeric_dtype(analysis_df[c])]
+        analysis_norm = analysis_df.copy()
+        for col in numeric_cols:
+            col_min = analysis_df[col].min()
+            col_max = analysis_df[col].max()
+            if col_max > col_min:
+                analysis_norm[col] = (analysis_df[col] - col_min) / (col_max - col_min)
+            else:
+                analysis_norm[col] = 0.5
 
-        a_num = sum(row[v] * weights[v]["Access"] for v in access_vars)
-        a_den = sum(weights[v]["Access"] for v in access_vars)
-        a_score = a_num / a_den if a_den > 0 else 0
+        # Map original variable names to processed columns (handle dummies)
+        def resolve_vars(var_list):
+            """Map original variable names to available columns in analysis_norm."""
+            resolved = {}
+            for v in var_list:
+                if v in numeric_cols:
+                    # Direct match
+                    resolved[v] = [v]
+                else:
+                    # Check if it's a prefix for dummy columns (e.g., 'plan_tier' -> 'plan_tier_Pro')
+                    matching = [c for c in numeric_cols if c.startswith(v + "_")]
+                    if matching:
+                        resolved[v] = matching
+                    else:
+                        # Fallback: try exact match anyway (might be non-numeric original)
+                        resolved[v] = [v]
+            return resolved
 
-        e_num = sum(row[v] * weights[v]["Evidence"] for v in evidence_vars)
-        e_den = sum(weights[v]["Evidence"] for v in evidence_vars)
-        e_score = e_num / e_den if e_den > 0 else 0
+        value_resolved = resolve_vars(value_vars)
+        access_resolved = resolve_vars(access_vars)
+        evidence_resolved = resolve_vars(evidence_vars)
 
-        return pd.Series({
-            "Value_score": round(v_score, 4),
-            "Access_score": round(a_score, 4),
-            "Evidence_score": round(e_score, 4),
-            "Traction_quotient": round(v_score * a_score * e_score, 4)
+        # ── Row-level scoring function ──────────────────────────────
+        def score_row(row):
+            # For each component, sum across all resolved columns (with equal weight per original var)
+            v_num = 0
+            v_den = 0
+            for v, cols in value_resolved.items():
+                var_sum = sum(row[c] * weights[v]["Value"] for c in cols if c in row.index)
+                v_num += var_sum / len(cols) if cols else 0
+                v_den += weights[v]["Value"]
+            v_score = v_num / v_den if v_den > 0 else 0
+
+            a_num = 0
+            a_den = 0
+            for v, cols in access_resolved.items():
+                var_sum = sum(row[c] * weights[v]["Access"] for c in cols if c in row.index)
+                a_num += var_sum / len(cols) if cols else 0
+                a_den += weights[v]["Access"]
+            a_score = a_num / a_den if a_den > 0 else 0
+
+            e_num = 0
+            e_den = 0
+            for v, cols in evidence_resolved.items():
+                var_sum = sum(row[c] * weights[v]["Evidence"] for c in cols if c in row.index)
+                e_num += var_sum / len(cols) if cols else 0
+                e_den += weights[v]["Evidence"]
+            e_score = e_num / e_den if e_den > 0 else 0
+
+            return pd.Series({
+                "Value_score": round(v_score, 4),
+                "Access_score": round(a_score, 4),
+                "Evidence_score": round(e_score, 4),
+                "Traction_quotient": round(v_score * a_score * e_score, 4)
+            })
+
+        # Apply row-level scoring
+        individual_scores = analysis_norm[numeric_cols].apply(score_row, axis=1)
+
+        # Build scored dataframe using ORIGINAL raw data + scores
+        scored_df = df_raw.copy() if df_raw is not None else df_proc.copy()
+        scored_df["Segment"] = analysis_df["Segment"]
+        scored_df["Value_score"] = individual_scores["Value_score"].values
+        scored_df["Access_score"] = individual_scores["Access_score"].values
+        scored_df["Evidence_score"] = individual_scores["Evidence_score"].values
+        scored_df["Traction_quotient"] = individual_scores["Traction_quotient"].values
+
+        # Segment rank (1 = best traction mean)
+        seg_traction_mean = scored_df.groupby("Segment")["Traction_quotient"].mean().sort_values(ascending=False)
+        seg_rank_map = {seg: i+1 for i, seg in enumerate(seg_traction_mean.index)}
+        scored_df["Segment_rank"] = scored_df["Segment"].map(seg_rank_map)
+
+        state['scored_df'] = scored_df
+
+        # ── Overall Sample ──────────────────────────────────────────
+        v_ov = scored_df["Value_score"].mean()
+        a_ov = scored_df["Access_score"].mean()
+        e_ov = scored_df["Evidence_score"].mean()
+        traction_ov = scored_df["Traction_quotient"].mean()
+
+        overall_result = pd.DataFrame({
+            "Metric": ["Size_Count", "Size_Pct", "Value", "Access", "Evidence", "Traction"],
+            "Overall_Sample": [
+                len(scored_df), 100.0, round(v_ov, 4), round(a_ov, 4), round(e_ov, 4), round(traction_ov, 4)
+            ]
         })
 
-    scores = df_norm[numeric_cols].apply(score_row, axis=1)
+        with overall_output:
+            clear_output()
+            display(HTML("<h4>Overall Sample Traction (K=1 Baseline)</h4>"))
+            display(overall_result.style.set_properties(**{'font-size': '11px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
 
-    scored_long = df.copy()
-    scored_long["Value_score"] = scores["Value_score"].values
-    scored_long["Access_score"] = scores["Access_score"].values
-    scored_long["Evidence_score"] = scores["Evidence_score"].values
-    scored_long["Traction_quotient"] = scores["Traction_quotient"].values
-    state['scored_long'] = scored_long
+        # ── Segment-wise ────────────────────────────────────────────
+        if labels is not None:
+            segments = sorted(scored_df["Segment"].unique())
+            segment_results = []
 
-    # Wide format
-    wide = scored_long.pivot(index=ac, columns=pc, values="Traction_quotient")
-    wide.columns = [f"Period_{c}" for c in wide.columns]
-    wide = wide.reset_index()
-    period_cols = [c for c in wide.columns if c.startswith("Period_")]
-    wide[period_cols] = wide[period_cols].fillna(wide[period_cols].mean())
+            for seg in segments:
+                seg_data = scored_df[scored_df["Segment"] == seg]
+                v_s = seg_data["Value_score"].mean()
+                a_s = seg_data["Access_score"].mean()
+                e_s = seg_data["Evidence_score"].mean()
+                traction_s = seg_data["Traction_quotient"].mean()
+                size_count = len(seg_data)
+                size_pct = size_count / len(scored_df) * 100
 
-    # Cluster
-    X = wide.drop(columns=[ac]).values
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+                segment_results.append({
+                    "Segment": seg,
+                    "Size_Count": size_count,
+                    "Size_Pct": round(size_pct, 4),
+                    "Value": round(v_s, 4),
+                    "Access": round(a_s, 4),
+                    "Evidence": round(e_s, 4),
+                    "Traction": round(traction_s, 4)
+                })
 
-    # Scree
-    wcss = []
-    ks = range(1, min(7, len(X)))
-    for ki in ks:
-        km = KMeans(n_clusters=ki, random_state=42, n_init=10)
-        km.fit(X_scaled)
-        wcss.append(km.inertia_)
+            seg_df = pd.DataFrame(segment_results)
+            seg_df = seg_df.sort_values("Traction", ascending=False)
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(list(ks), wcss, 'bo-', linewidth=2, markersize=8)
-    ax.set_xlabel('K', fontsize=11)
-    ax.set_ylabel('WCSS', fontsize=11)
-    ax.set_title('Scree Plot: Trajectory Clusters', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.set_xticks(list(ks))
-    plt.tight_layout()
+            transposed = seg_df.set_index("Segment").T
+            transposed.index.name = "Metric"
+            transposed = transposed.reset_index()
 
-    with scree_output:
-        clear_output()
-        display(fig)
-    plt.close(fig)
+            rankings = []
+            for _, row in seg_df.iterrows():
+                seg = row["Segment"]
+                v, a, e, t = row["Value"], row["Access"], row["Evidence"], row["Traction"]
 
-    # Final K-Means
-    km_final = KMeans(n_clusters=k, random_state=42, n_init=10)
-    labels = km_final.fit_predict(X_scaled)
-    wide["Cluster"] = labels
-    state['scored_wide'] = wide
-    state['k'] = k
+                if v > 0.6 and a > 0.6 and e > 0.6:
+                    name = f"🏆 {seg} (High Traction)"
+                elif v > 0.5 and a < 0.3 and e < 0.3:
+                    name = f"⚠️ {seg} (High Activity, Low Conversion)"
+                elif v < 0.3 and a < 0.3 and e < 0.3:
+                    name = f"💤 {seg} (Low Engagement)"
+                elif e > 0.5:
+                    name = f"💰 {seg} (High Conversion)"
+                elif v > 0.5:
+                    name = f"🔥 {seg} (High Engagement)"
+                else:
+                    name = f"❓ {seg} (Mixed Profile)"
 
-    # Cluster sizes
-    cluster_sizes = wide["Cluster"].value_counts().sort_index()
-    state['cluster_sizes'] = cluster_sizes
+                rankings.append(name)
+                rankings.append(f"   Value={v:.4f} | Access={a:.4f} | Evidence={e:.4f} | Traction={t:.4f}")
+                rankings.append("")
 
-    # Centroids with sizes
-    centroids_data = []
-    for i in range(k):
-        cluster_data = wide[wide["Cluster"] == i]
-        mean_traj = cluster_data[period_cols].mean()
-        row = {"Cluster": f"Cluster {i+1}", "Size (n)": len(cluster_data)}
-        for col in period_cols:
-            row[col] = round(mean_traj[col], 4)
-        centroids_data.append(row)
-    centroids = pd.DataFrame(centroids_data)
-    state['centroids'] = centroids
+            ranking_text = "\n".join(rankings)
+        else:
+            transposed = None
+            ranking_text = "No segmentation run yet."
 
-    with centroids_output:
-        clear_output()
-        display(HTML("<h4>Cluster Centroids (with Segment Sizes)</h4>"))
-        display(centroids.style.set_properties(**{'font-size': '11px'}).set_table_styles([
-            {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
-            {'selector': 'td', 'props': [('border', '1px solid #eee')]}
-        ]))
+        with segment_output:
+            clear_output()
+            display(HTML("<h4>Segment-wise Traction (Transposed for AI Copy-Paste)</h4>"))
+            display(transposed.style.set_properties(**{'font-size': '11px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
 
-    # Summary
-    summary = wide.copy()
-    summary["Mean_Traction"] = summary[period_cols].mean(axis=1).round(4)
-    summary["Std_Traction"] = summary[period_cols].std(axis=1).round(4)
-    summary["Trend"] = (summary[period_cols[-1]] - summary[period_cols[0]]).round(4)
-    summary["Cluster_Label"] = [f"Cluster {l+1}" for l in labels]
+        ranking_txt.value = ranking_text
 
-    summary_display = summary[[ac, "Cluster_Label", "Mean_Traction", "Std_Traction", "Trend"] + period_cols[:3] + period_cols[-3:]]
+        # ── Individual scores preview ─────────────────────────────
+        preview_cols = ["Segment", "Value_score", "Access_score", "Evidence_score", "Traction_quotient", "Segment_rank"]
+        if df_raw is not None and len(df_raw.columns) > 0:
+            id_col = df_raw.columns[0]
+            if id_col in scored_df.columns:
+                preview_cols = [id_col] + preview_cols
 
-    with summary_output:
-        clear_output()
-        display(HTML(f"<h4>Account Summary (showing {min(20, len(summary_display))} of {len(summary_display)} accounts)</h4>"))
-        display(summary_display.head(20).style.set_properties(**{'font-size': '10px'}).set_table_styles([
-            {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('font-weight', 'bold')]},
-            {'selector': 'td', 'props': [('border', '1px solid #eee')]}
-        ]))
+        individual_preview = scored_df[preview_cols].head(10)
 
-    # Update account dropdown
-    account_dropdown_view.options = ['(None)'] + sorted(df[ac].unique().tolist())[:100]
-    account_dropdown_view.value = '(None)'
+        with individual_output:
+            clear_output()
+            display(HTML(f"<h4>Individual Scores Preview (first 10 of {len(scored_df)} rows)</h4>"))
+            display(individual_preview.style.set_properties(**{'font-size': '10px'}).set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#f0f0f0'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('border', '1px solid #eee')]}
+            ]))
 
-    # Generate initial trajectory plot
-    generate_trajectory_plot()
+        # ── Histogram ───────────────────────────────────────────────
+        fig, ax = plt.subplots(figsize=(10, 6))
+        segments_ordered = seg_df["Segment"].tolist() if labels is not None else ["Overall"]
+        colors = plt.cm.Set2(np.linspace(0, 1, len(segments_ordered)))
 
-    results_status.value = f"<p style='color:green;'>✅ Computed traction for <b>{len(df):,}</b> rows. Clustered <b>{len(wide):,}</b> accounts into <b>{k}</b> trajectory clusters.</p>"
+        for i, seg in enumerate(segments_ordered):
+            seg_data = scored_df[scored_df["Segment"] == seg]["Traction_quotient"]
+            ax.hist(seg_data, bins=30, alpha=0.6, label=seg, color=colors[i], edgecolor='white')
 
-    tabs.selected_index = 2
+        ax.axvline(scored_df["Traction_quotient"].mean(), color='black', linestyle='--', linewidth=2, 
+                   label=f'Overall Mean={scored_df["Traction_quotient"].mean():.4f}')
+        ax.set_xlabel("Traction Quotient", fontsize=12)
+        ax.set_ylabel("Frequency", fontsize=12)
+        ax.set_title("Distribution of Individual Traction Scores by Segment", fontsize=14, fontweight='bold')
+        ax.legend(title="Segments", loc='best')
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
 
-compute_btn.on_click(on_compute)
+        with traction_hist_output:
+            clear_output()
+            display(fig)
+        plt.close(fig)
 
-# ── Trajectory Plot ───────────────────────────────────────────────────
+        traction_status.value = f"<p style='color:green;'>✅ Traction computed for <b>{len(scored_df):,}</b> individuals. Overall mean={scored_df['Traction_quotient'].mean():.4f}</p>"
+        export_report_btn.disabled = False
+        export_csv_btn.disabled = False
+        export_status.value = "<p>Click Download to export the report or scored data.</p>"
 
-def generate_trajectory_plot():
-    wide_df = state['scored_wide']
-    k = state['k']
-    view = view_dropdown.value
-    account = account_dropdown_view.value
+        tabs.selected_index = 5
 
-    if wide_df is None or wide_df.empty:
-        return
+    except Exception as e:
+        traction_status.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
 
-    period_cols = [c for c in wide_df.columns if c.startswith("Period_")]
-    if not period_cols:
-        return
+def handle_export_report(b):
+    global state
+    df_proc = state['df_processed']
+    labels = state['segment_labels']
+    segment_names = state['segment_names']
+    weight_text = weight_editor.value
+    reflection = reflection_box.value
+    scored_df = state['scored_df']
 
-    periods = []
-    for c in period_cols:
-        try:
-            periods.append(int(c.split("_")[1]))
-        except:
-            periods.append(c)
-
-    sorted_pairs = sorted(zip(periods, period_cols), key=lambda x: x[0] if isinstance(x[0], (int, float)) else str(x[0]))
-    periods = [p for p, _ in sorted_pairs]
-    period_cols = [c for _, c in sorted_pairs]
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    if view == "Cluster Means":
-        colors = plt.cm.Set2(np.linspace(0, 1, k))
-        for i in range(k):
-            cluster_data = wide_df[wide_df["Cluster"] == i]
-            if len(cluster_data) == 0:
-                continue
-            mean_traj = cluster_data[period_cols].mean()
-            size = state['cluster_sizes'].get(i, 0) if state['cluster_sizes'] is not None else len(cluster_data)
-            ax.plot(periods, mean_traj, 'o-', linewidth=2.5, markersize=8, 
-                   color=colors[i], label=f"Cluster {i+1} (n={size})")
-        ax.set_title("Traction Trajectory by Cluster", fontsize=12, fontweight='bold')
-
-    elif view == "Full Sample":
-        mean_traj = wide_df[period_cols].mean()
-        std_traj = wide_df[period_cols].std()
-        ax.plot(periods, mean_traj, 'o-', linewidth=2.5, markersize=8, color='#2E86AB', label="Full Sample Mean")
-        ax.fill_between(periods, mean_traj - std_traj, mean_traj + std_traj, alpha=0.2, color='#2E86AB', label="±1 SD")
-        ax.set_title("Full Sample Traction Trajectory", fontsize=12, fontweight='bold')
-
-    # Overlay account
-    non_period = [c for c in wide_df.columns if not c.startswith("Period_") and c != "Cluster"]
-    if non_period and account and account != '(None)' and account in wide_df[non_period[0]].values:
-        acc_data = wide_df[wide_df[non_period[0]] == account]
-        if len(acc_data) > 0:
-            acc_traj = acc_data[period_cols].values[0]
-            ax.plot(periods, acc_traj, 's--', linewidth=2, markersize=10, 
-                   color='red', label=f"Account {account}", zorder=5)
-
-    ax.set_xlabel("Period", fontsize=11)
-    ax.set_ylabel("Traction Quotient", fontsize=11)
-    ax.legend(loc='best', framealpha=0.9)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-
-    with trajectory_output:
-        clear_output()
-        display(fig)
-    plt.close(fig)
-
-def on_view_change(change):
-    generate_trajectory_plot()
-
-def on_account_change(change):
-    generate_trajectory_plot()
-
-view_dropdown.observe(on_view_change, names='value')
-account_dropdown_view.observe(on_account_change, names='value')
-
-# ── Export Handlers ───────────────────────────────────────────────────
-
-def on_export_wide(b):
-    wide = state['scored_wide']
-    if wide is None:
-        export_status.value = "<p style='color:red;'>❌ Compute first.</p>"
-        return
-    path = "/tmp/panel_traction_wide.csv"
-    wide.to_csv(path, index=False)
-
-    with download_area:
-        clear_output()
-        display(HTML(f"""
-        <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
-            <b>✅ Wide format saved</b><br>
-            Path: {path}<br>
-            Accounts: {len(wide):,}<br><br>
-            <i>In Colab: run <code>from google.colab import files; files.download('{path}')</code></i><br>
-            <i>In Jupyter: <a href="{FileLink(path).href}" target="_blank">Download wide CSV</a></i>
-        </div>
-        """))
-
-    export_status.value = f"<p style='color:green;'>✅ Wide format saved to {path}</p>"
-
-def on_export_long(b):
-    long = state['scored_long']
-    if long is None:
-        export_status.value = "<p style='color:red;'>❌ Compute first.</p>"
-        return
-    path = "/tmp/panel_traction_long.csv"
-    long.to_csv(path, index=False)
-
-    with download_area:
-        clear_output()
-        display(HTML(f"""
-        <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
-            <b>✅ Long format saved</b><br>
-            Path: {path}<br>
-            Rows: {len(long):,}<br><br>
-            <i>In Colab: run <code>from google.colab import files; files.download('{path}')</code></i><br>
-            <i>In Jupyter: <a href="{FileLink(path).href}" target="_blank">Download long CSV</a></i>
-        </div>
-        """))
-
-    export_status.value = f"<p style='color:green;'>✅ Long format saved to {path}</p>"
-
-def on_export_report(b):
-    wide = state['scored_wide']
-    if wide is None:
-        export_status.value = "<p style='color:red;'>❌ Compute first.</p>"
+    if df_proc is None:
+        export_status.value = "<p style='color:red;'>❌ Run full analysis before exporting.</p>"
         return
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    k = state['k']
-    cluster_sizes = state['cluster_sizes']
-    centroids = state['centroids']
 
-    report = [
-        "# Panel Traction Audit Report",
+    report_lines = [
+        "# Customer Segmentation & Traction Audit Report",
         "",
-        f"Generated: {timestamp}",
-        f"Accounts: {len(wide):,}",
-        f"Clusters: {k}",
+        f"**Generated:** {timestamp}",
+        f"**Dataset:** {len(df_proc):,} rows × {len(df_proc.columns)} columns",
         "",
-        "## Cluster Sizes",
+        "---",
+        "",
+        "## 1. Segment Names",
         ""
     ]
-    for i in range(k):
-        size = cluster_sizes.get(i, 0) if cluster_sizes is not None else 0
-        report.append(f"  Cluster {i+1}: {size} accounts ({size/len(wide)*100:.1f}%)")
+    for i, name in enumerate(segment_names):
+        report_lines.append(f"- {name}")
 
-    report.extend(["", "---", "", "## Cluster Centroids", ""])
-    if centroids is not None:
-        report.append(centroids.to_string(index=False))
+    report_lines.extend([
+        "",
+        "---",
+        "",
+        "## 2. Reflection",
+        "",
+        reflection if reflection else "*(No reflection provided)*",
+        "",
+        "---",
+        "",
+        "## 3. Variable Weights",
+        "",
+        "```",
+        weight_text if weight_text else "(No weights set)",
+        "```",
+        "",
+        "---",
+        "",
+        "## 4. Traction Results",
+        "",
+        f"**Overall Mean Traction:** {scored_df['Traction_quotient'].mean():.4f}" if scored_df is not None else "",
+        "",
+        "### Individual Scores Summary",
+        ""
+    ])
 
-    report.extend(["", "---", "", "## Reflection", "", state['reflection'] or "(No reflection)", "", "---", "", "*End of Report*"])
+    if scored_df is not None:
+        report_lines.append(f"- Total individuals: {len(scored_df):,}")
+        report_lines.append(f"- Mean Value: {scored_df['Value_score'].mean():.4f}")
+        report_lines.append(f"- Mean Access: {scored_df['Access_score'].mean():.4f}")
+        report_lines.append(f"- Mean Evidence: {scored_df['Evidence_score'].mean():.4f}")
+        report_lines.append(f"- Mean Traction: {scored_df['Traction_quotient'].mean():.4f}")
 
-    path = "/tmp/panel_traction_report.txt"
-    with open(path, "w") as f:
-        f.write("\n".join(report))
+    report_lines.extend([
+        "",
+        "---",
+        "",
+        "*End of Report*"
+    ])
 
-    with download_area:
-        clear_output()
-        display(HTML(f"""
-        <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
-            <b>✅ Report saved</b><br>
-            Path: {path}<br><br>
-            <i>In Colab: run <code>from google.colab import files; files.download('{path}')</code></i><br>
-            <i>In Jupyter: <a href="{FileLink(path).href}" target="_blank">Download report</a></i>
-        </div>
-        """))
+    report_text = "\n".join(report_lines)
+    report_path = "/tmp/traction_report.txt"
+    with open(report_path, "w") as f:
+        f.write(report_text)
 
-    export_status.value = f"<p style='color:green;'>✅ Report saved to {path}</p>"
+    export_status.value = f"""
+    <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
+        <b>✅ Report saved</b><br>
+        Path: {report_path}<br><br>
+        <b>To download:</b> Copy the path above and run in a new cell:<br>
+        <code>from google.colab import files; files.download('{report_path}')</code>
+    </div>
+    """
 
-export_wide_btn.on_click(on_export_wide)
-export_long_btn.on_click(on_export_long)
-export_report_btn.on_click(on_export_report)
+def handle_export_csv(b):
+    global state
+    scored_df = state['scored_df']
 
-results_section = widgets.VBox([
-    widgets.HTML("<h2>📈 Section 3: Traction Over Time</h2>"),
-    widgets.HBox([k_slider, compute_btn]),
-    results_status,
-    widgets.HTML("<h4>Scree Plot</h4>"),
-    scree_output,
-    widgets.HTML("<h4>Cluster Centroids</h4>"),
-    centroids_output,
-    widgets.HTML("<h4>Trajectory Plot</h4>"),
-    widgets.HBox([view_dropdown, account_dropdown_view]),
-    trajectory_output,
-    widgets.HTML("<h4>Account Summary</h4>"),
-    summary_output,
-    widgets.HTML("<h4>Export</h4>"),
-    widgets.HBox([export_wide_btn, export_long_btn, export_report_btn]),
-    export_status,
-    download_area
-])
+    if scored_df is None:
+        export_status.value = "<p style='color:red;'>❌ Calculate traction first before exporting CSV.</p>"
+        return
 
-# ═══════════════════════════════════════════════════════════════════════
-# ASSEMBLE TABS
-# ═══════════════════════════════════════════════════════════════════════
+    csv_path = "/tmp/scored_data.csv"
+    scored_df.to_csv(csv_path, index=False)
 
-tabs = widgets.Tab(children=[upload_section, mapping_section, results_section])
-tabs.set_title(0, '📁 Upload & Configure')
-tabs.set_title(1, '🔧 Map Components')
-tabs.set_title(2, '📈 Traction & Clusters')
+    export_status.value = f"""
+    <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
+        <b>✅ CSV saved</b><br>
+        Path: {csv_path}<br>
+        Rows: {len(scored_df):,} | Columns: {len(scored_df.columns)}<br><br>
+        <b>To download:</b> Copy the path above and run in a new cell:<br>
+        <code>from google.colab import files; files.download('{csv_path}')</code>
+    </div>
+    """
 
+# ── Wire up events ────────────────────────────────────────────────────
+file_in.observe(handle_upload, names='value')
+basis_check.observe(handle_basis_change, names='value')
+cat_check.observe(handle_cat_change, names='value')
+confirm_btn.on_click(handle_confirm)
+run_btn.on_click(handle_run)
+apply_names_btn.on_click(handle_apply_names)
+value_check.observe(update_weight_editor, names='value')
+access_check.observe(update_weight_editor, names='value')
+evidence_check.observe(update_weight_editor, names='value')
+clear_weights_btn.on_click(handle_clear_weights)
+calc_btn.on_click(handle_traction)
+export_report_btn.on_click(handle_export_report)
+export_csv_btn.on_click(handle_export_csv)
+
+# ── Display ───────────────────────────────────────────────────────────
+display(widgets.HTML("<h1>🎯 Customer Segmentation & Traction Audit</h1>"))
+display(widgets.HTML("<p><b>Upload any dataset, segment via K-Means, map to Traction Equation, score individuals, and export results.</b></p>"))
 display(tabs)
