@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════
 # App 2: Panel Traction Over Time — Dynamic Account Scoring (ipywidgets)
-# BULLETPROOF VERSION — numeric columns only, no dummy encoding
+# WITH dummy encoding + float fix for nonmetric variables
 # Paste into ONE Jupyter/Colab cell and run
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -32,6 +32,7 @@ state = {
     'account_col': None,
     'period_col': None,
     'numeric_cols': [],
+    'dummy_cols': [],
     'scored_long': None,
     'scored_wide': None,
     'k': 3
@@ -381,7 +382,7 @@ def handle_upload(change):
             f"📊 Unique accounts: {df[likely_account[0]].nunique() if likely_account else 'N/A'}",
             f"📊 Periods: {sorted(df[likely_period[0]].unique()) if likely_period else 'N/A'}",
             f"📊 Numeric: {len(df.select_dtypes(include=[np.number]).columns)}",
-            f"📊 Non-numeric (ignored): {len(df.select_dtypes(include=['object', 'category', 'bool']).columns)}",
+            f"📊 Categorical/object: {len(df.select_dtypes(include=['object', 'category']).columns)}",
             "",
             "Column breakdown:"
         ]
@@ -409,22 +410,39 @@ def handle_configure(b):
         config_status.value = "<p style='color:red;'>❌ Account and Period must be different.</p>"
         return
 
-    # ── BULLETPROOF: numeric columns ONLY, drop everything else ─────────
-    numeric_cols = [c for c in df.columns if c not in [ac, pc] and pd.api.types.is_numeric_dtype(df[c])]
+    # ── Auto dummy-encode non-numeric columns ──────────────────────────
+    non_numeric_cols = [c for c in df.columns if c not in [ac, pc] and not pd.api.types.is_numeric_dtype(df[c])]
 
-    state['df_processed'] = df
+    df_processed = df.copy()
+    dummy_cols = []
+    skipped_cols = []
+
+    for col in non_numeric_cols:
+        n_unique = df_processed[col].nunique()
+        if n_unique <= 20 and n_unique > 1 and n_unique < len(df_processed) * 0.9:
+            dummies = pd.get_dummies(df_processed[col], prefix=col, drop_first=False, dtype=int)
+            df_processed = pd.concat([df_processed, dummies], axis=1)
+            dummy_cols.extend(dummies.columns.tolist())
+        else:
+            skipped_cols.append(f"{col} ({n_unique} unique)")
+
+    numeric_cols = [c for c in df_processed.columns if c not in [ac, pc] and pd.api.types.is_numeric_dtype(df_processed[c])]
+
+    state['df_processed'] = df_processed
     state['account_col'] = ac
     state['period_col'] = pc
     state['numeric_cols'] = numeric_cols
+    state['dummy_cols'] = dummy_cols
 
     if len(state['numeric_cols']) < 2:
-        config_status.value = "<p style='color:red;'>❌ Need at least 2 numeric variables for traction mapping. Non-numeric columns are ignored.</p>"
+        config_status.value = "<p style='color:red;'>❌ Need at least 2 numeric variables (original or dummy-encoded) for traction mapping.</p>"
         return
 
     n_accounts = df[ac].nunique()
     n_periods = df[pc].nunique()
 
-    config_status.value = f"<p style='color:green;'>✅ Panel configured: <b>{n_accounts:,}</b> accounts × <b>{n_periods:,}</b> periods. <b>{len(numeric_cols)}</b> numeric variables available. Non-numeric columns ignored.</p>"
+    skip_msg = f"<br>Skipped: {', '.join(skipped_cols)}" if skipped_cols else ""
+    config_status.value = f"<p style='color:green;'>✅ Panel configured: <b>{n_accounts:,}</b> accounts × <b>{n_periods:,}</b> periods. <b>{len(numeric_cols)}</b> variables ({len(numeric_cols) - len(dummy_cols)} original + {len(dummy_cols)} dummies).{skip_msg}</p>"
 
     value_check.options = state['numeric_cols']
     value_check.value = ()
@@ -436,7 +454,7 @@ def handle_configure(b):
     evidence_check.value = ()
     evidence_check.disabled = False
 
-    mapping_status.value = f"<p style='color:green;'>✅ <b>{len(state['numeric_cols'])}</b> numeric variables available. Select for each component.</p>"
+    mapping_status.value = f"<p style='color:green;'>✅ <b>{len(state['numeric_cols'])}</b> variables available ({len(numeric_cols) - len(dummy_cols)} original + {len(dummy_cols)} dummy-encoded). Select for each component.</p>"
     run_btn.disabled = False
 
     tabs.selected_index = 1
@@ -519,14 +537,19 @@ def handle_compute(b):
         scored_long["Value_score"] = scores["Value_score"].values
         scored_long["Access_score"] = scores["Access_score"].values
         scored_long["Evidence_score"] = scores["Evidence_score"].values
-        scored_long["Traction_quotient"] = scores["Traction_quotient"].values
+        # ══ CRITICAL FIX: force float to prevent boolean inference ══
+        scored_long["Traction_quotient"] = scores["Traction_quotient"].astype(float).values
         state['scored_long'] = scored_long
 
-        # Wide format — EXACTLY like Gradio version
+        # Wide format
         wide = scored_long.pivot(index=ac, columns=pc, values="Traction_quotient")
         wide.columns = [f"Period_{c}" for c in wide.columns]
         wide = wide.reset_index()
         period_cols = [c for c in wide.columns if c.startswith("Period_")]
+
+        # ══ CRITICAL FIX: ensure period columns are float ══
+        for pcol in period_cols:
+            wide[pcol] = wide[pcol].astype(float)
 
         # Handle missing periods — fill with column mean (Gradio behavior)
         if period_cols:
