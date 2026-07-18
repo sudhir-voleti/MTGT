@@ -1,5 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════
-# Caselet 1: 4-Tab App — Customer Segmentation (ipywidgets)
+# Caselet 1: 4-Tab Customer Segmentation (ipywidgets) — VERSION 2
+# FIXED: Transposed centroids (variables as rows), 4-decimal rounding everywhere
 # Paste into ONE Jupyter/Colab cell and run
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -440,7 +441,7 @@ def handle_confirm(b):
         plt.close(fig)
 
         # WCSS table
-        wcss_df = pd.DataFrame({"K": list(ks), "WCSS": [round(w, 2) for w in wcss]})
+        wcss_df = pd.DataFrame({"K": list(ks), "WCSS": [round(w, 4) for w in wcss]})
         pct_drops = [None] + [round((wcss[i-1] - wcss[i]) / wcss[i-1] * 100, 1) for i in range(1, len(wcss))]
         wcss_df["Pct_Drop"] = pct_drops
 
@@ -486,19 +487,21 @@ def handle_run(b):
         km = KMeans(n_clusters=k, random_state=42, n_init=10)
         labels = km.fit_predict(X_scaled)
 
-        # Centroids in standardized space — round to 3 decimals
+        # Centroids — TRANSPOSED for readability (variables as rows, segments as columns)
         cents = pd.DataFrame(
-            np.round(km.cluster_centers_, 3),
-            columns=processed_cols,
-            index=[f"Segment {i+1}" for i in range(k)]
+            np.round(km.cluster_centers_, 4).T,
+            index=processed_cols,
+            columns=[f"Segment {i+1}" for i in range(k)]
         )
+        cents.index.name = "Variable"
+        cents = cents.reset_index()
 
         # Segment sizes
         sizes = pd.Series(labels).value_counts().sort_index()
         sizes_df = pd.DataFrame({
             "Segment": [f"Segment {i+1}" for i in sizes.index],
             "Count": sizes.values,
-            "Pct": (sizes.values / len(labels) * 100).round(1)
+            "Pct": (sizes.values / len(labels) * 100).round(4)
         })
 
         # PCA scatter on standardized data
@@ -533,14 +536,19 @@ def handle_run(b):
                 {'selector': 'td', 'props': [('border', '1px solid #eee')]}
             ]))
 
-        # Display centroids
+        # Display centroids (transposed) + CSV download
         with cents_output:
             clear_output()
-            display(HTML("<h4>Centroids (Standardized Scale, 3 decimals)</h4>"))
+            display(HTML("<h4>Centroids (Standardized Scale, 4 decimals) — Transposed</h4>"))
+            display(HTML("<p><i>Variables as rows, Segments as columns. Download CSV below for easy copy-paste into AI queries.</i></p>"))
             display(cents.style.set_properties(**{'font-size': '10px'}).set_table_styles([
                 {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
                 {'selector': 'td', 'props': [('border', '1px solid #eee')]}
             ]))
+            # Downloadable CSV for copy-paste
+            cents_csv_path = "/tmp/centroids.csv"
+            cents.to_csv(cents_csv_path, index=False)
+            display(HTML(f"<p><a href='{FileLink(cents_csv_path).href}' target='_blank'>📥 Download Centroids CSV</a></p>"))
 
         # Labeled data preview
         result_df = df_proc.copy()
