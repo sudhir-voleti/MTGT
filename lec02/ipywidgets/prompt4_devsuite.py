@@ -471,7 +471,7 @@ def handle_upload(change):
         evidence_check.disabled = True
         weight_editor.value = ''
         mapping_status.value = "<p>Run segmentation first, then select variables and set weights.</p>"
-        calc_btn.disabled = True
+        calc_btn.disabled = False
         traction_status.value = "<p>Configure mapping in Tab 5, then click Calculate.</p>"
         export_btn.disabled = True
         export_status.value = "<p>Calculate traction and write reflection, then export.</p>"
@@ -631,6 +631,7 @@ def handle_run(b):
         seg_status.value = f"<p style='color:red;'>❌ Need ≥{k} rows for K={k}.</p>"
         return
     try:
+
         km = KMeans(n_clusters=k, random_state=42, n_init=10)
         labels = km.fit_predict(X_scaled)
         state['segment_labels'] = labels
@@ -639,9 +640,12 @@ def handle_run(b):
         state['segment_names'] = default_names
         segment_names_input.value = ", ".join(default_names)
 
+        # Enable calc_btn immediately after successful segmentation (before any display)
+        calc_btn.disabled = False
+
         # Transposed centroids
         cents = pd.DataFrame(
-            np.round(km.cluster_centers_, 3).T,
+            np.round(km.cluster_centers_, 4).T,
             index=processed_cols,
             columns=default_names
         )
@@ -652,7 +656,7 @@ def handle_run(b):
         sizes_df = pd.DataFrame({
             "Segment": [default_names[i] for i in sizes.index],
             "Count": sizes.values,
-            "Pct": (sizes.values / len(labels) * 100).round(1)
+            "Pct": (sizes.values / len(labels) * 100).round(4)
         })
 
         pca = PCA(n_components=2)
