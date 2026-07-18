@@ -15,7 +15,7 @@ for pkg in ["ipywidgets", "scikit-learn", "pandas", "matplotlib", "seaborn", "IP
 
 # ── Imports ─────────────────────────────────────────────────────────────
 import ipywidgets as widgets
-from IPython.display import display, HTML, clear_output, FileLink
+from IPython.display import display, HTML, clear_output
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
@@ -723,7 +723,7 @@ def handle_run(b):
             # Downloadable CSV for copy-paste
             cents_csv_path = "/tmp/centroids.csv"
             cents.to_csv(cents_csv_path, index=False)
-            display(HTML(f"<p><a href='{FileLink(cents_csv_path).href}' target='_blank'>📥 Download Centroids CSV</a></p>"))
+            display(HTML(f"<p>📥 <b>Centroids CSV saved:</b> {cents_csv_path} — Run <code>from google.colab import files; files.download('{cents_csv_path}')</code> to download</p>"))
 
         result_df = df_proc.copy()
         result_df["Segment"] = [default_names[l] for l in labels]
@@ -1113,10 +1113,11 @@ def handle_export_csv(b):
 
     export_status.value = f"""
     <div style="background:#d4edda; padding:10px; border-radius:6px; border-left:4px solid #28a745;">
-        <b>✅ Report saved</b><br>
-        Path: {report_path}<br><br>
+        <b>✅ CSV saved</b><br>
+        Path: {csv_path}<br>
+        Rows: {len(scored_df):,} | Columns: {len(scored_df.columns)}<br><br>
         <b>To download:</b> Copy the path above and run in a new cell:<br>
-        <code>from google.colab import files; files.download('{report_path}')</code>
+        <code>from google.colab import files; files.download('{csv_path}')</code>
     </div>
     """
 
