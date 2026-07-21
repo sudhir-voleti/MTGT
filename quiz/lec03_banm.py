@@ -1,5 +1,5 @@
 """
-MTGT Lec03 Factor Analysis Quiz — Gradio "Submit All"
+MTGT Lec03 Factor Analysis Quiz — Gradio "Submit All" (Revised 5 Questions)
 Usage in Colab:
     import requests
     exec(requests.get("https://raw.githubusercontent.com/sudhir-voleti/MTGT/main/quiz/lec03_banm.py").text)
@@ -21,31 +21,23 @@ LEC_ID = "Lec03"
 QUESTIONS = [
     {
         "q_id": "q1",
-        "text": "In the image reconstruction example (the smiling face), what happens to the quality of the reconstructed image as we increase the number of factors from 1 → 5 → 10 → 25? What does this illustrate about the relationship between number of factors and information retained?"
+        "text": "In a customer survey for a streaming platform, the following variables load highly on the same factor: binge_watching_hours, content_discovery_time, subscription_upgrade_likelihood, and skip_intro_rate (negative loading). What would you name this factor? Briefly justify your label."
     },
     {
         "q_id": "q2",
-        "text": "A factor is created by re-weighting a group of correlated variables. In the toothpaste example, three variables loaded highly on Factor 1 and three on Factor 2. What descriptive names would you give Factor 1 and Factor 2? Briefly justify your labels using the loading variables."
+        "text": "An insurance company runs Factor Analysis on policyholder data. Three variables load strongly on Factor 1: claim_frequency (positive), premium_sensitivity (positive), and loyalty_tenure (negative). What latent construct is this factor most likely capturing? How might the company use this factor in its marketing or underwriting strategy?"
     },
     {
         "q_id": "q3",
-        "text": "In the toothpaste factor solution, Factor Scores are scaled as standard normal (mean ≈ 0, SD ≈ 1). If a particular respondent has a high positive score on the 'Health Benefits' factor and a high negative score on the 'Cosmetic Benefits' factor, how would you describe this person's toothpaste preference? What kind of product positioning might appeal to them?"
+        "text": "In an e-commerce dataset, Factor 2 is defined by high loadings on: cart_abandonment_rate, price_comparison_clicks, coupon_usage_frequency, and return_rate. Give this factor a clear managerial name and explain what kind of customer behavior it represents."
     },
     {
         "q_id": "q4",
-        "text": "In the mtcars example, the factor solution typically produces two clear factors (one related to power/performance and one related to economy/efficiency). Looking at the factor plot of cars, what does it mean if a car sits in the 'High Power + Low Economy' quadrant? Give one real-world managerial implication of this positioning."
+        "text": "A bank analyzes customer digital banking data and finds two clean factors: Factor A: high on mobile_app_logins, upi_transactions, instant_loan_uptake; Factor B: high on branch_visits, cheque_usage, fixed_deposit_preference. Interpret both factors. What strategic recommendation would you give the bank based on these two factors?"
     },
     {
         "q_id": "q5",
-        "text": "Suppose you run Factor Analysis on a new dataset and the main variables loading highly on Factor 1 are: crypto_investment_ratio, trading_freq, risk_aversion (negative loading). What would you name Factor 1? Briefly justify and suggest one way a wealth management firm could use this factor."
-    },
-    {
-        "q_id": "q6",
-        "text": "In the manufacturing plant data, Factor 1 loads heavily on energy_consumption, material_waste, and carbon_emission_level. What would you name this factor? A plant scores very high on this factor but also high on 'Production & Quality'. What does this combination tell you about their current strategy, and what is your top recommendation?"
-    },
-    {
-        "q_id": "q7",
-        "text": "Factor Analysis reduces many variables into a smaller set of latent factors. Why is this useful for marketing managers? Give two concrete examples of how the resulting factors (or factor scores) can be used downstream (e.g., for segmentation, targeting, product design, or communication)."
+        "text": "Why is Factor Analysis particularly useful when a firm has 30–50 survey items or operational KPIs? Give one concrete marketing or managerial benefit of reducing them to 4–6 factors."
     }
 ]
 
