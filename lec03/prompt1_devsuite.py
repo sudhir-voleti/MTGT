@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════
-# MTGT Lec03: Competitor Traction Estimator (ipywidgets)
-# Phase 1 + 2 + 4 MVP — Data Ingestion, Metric Config, Score Computation
+# MTGT Lec03: Competitor Traction Estimator — Prompt 1 (Self-Contained)
+# Upload + Configure + Equal-Weight Compute (no custom weighting yet)
 # Paste into ONE Jupyter/Colab cell and run
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -24,16 +24,15 @@ warnings.filterwarnings('ignore')
 
 # ── Global State ────────────────────────────────────────────────────────
 state = {
-    'df_raw': None,           # Original uploaded CSV
-    'df_configured': None,    # After direction/pillar mapping applied
-    'df_normalized': None,    # After 0-1 normalization
-    'df_scored': None,        # Final with Access/Value/Evidence/Traction
-    'metric_meta': {},        # dict: col_name -> {'direction': 'higher'/'lower', 'pillar': 'Access'/...}
-    'firm_col': None,         # Name of the firm identifier column
+    'df_raw': None,
+    'df_configured': None,
+    'df_scored': None,
+    'metric_meta': {},
+    'firm_col': None,
 }
 
 # ═══════════════════════════════════════════════════════════════════════
-# PHASE 1: DATA INGESTION & PREVIEW
+# TAB 1: DATA INGESTION & PREVIEW
 # ═══════════════════════════════════════════════════════════════════════
 
 file_in = widgets.FileUpload(
@@ -50,9 +49,9 @@ with preview_output:
 
 info_box = widgets.HTML(value="<p><b>Dataset info will appear here.</b></p>")
 
-phase1_box = widgets.VBox([
-    widgets.HTML("<h2>📁 Phase 1: Upload Feature Parity Matrix</h2>"),
-    widgets.HTML("<p>Upload a CSV where <b>rows = firms</b> and <b>columns = metrics/dimensions</b>. The first column should be the firm name (e.g., <code>Firm</code> or <code>Company</code>).</p>"),
+tab1 = widgets.VBox([
+    widgets.HTML("<h2>📁 Upload Feature Parity Matrix</h2>"),
+    widgets.HTML("<p>Upload a CSV where <b>rows = firms</b> and <b>columns = metrics</b>. First column = firm name.</p>"),
     widgets.HBox([file_in, status]),
     widgets.HTML("<h4>Data Preview</h4>"),
     preview_output,
@@ -60,12 +59,11 @@ phase1_box = widgets.VBox([
 ])
 
 # ═══════════════════════════════════════════════════════════════════════
-# PHASE 2: METRIC CONFIGURATION
+# TAB 2: METRIC CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════
 
-# These will be populated dynamically after upload
 config_vbox = widgets.VBox([])
-config_status = widgets.HTML(value="<p>Upload data in Phase 1 first.</p>")
+config_status = widgets.HTML(value="<p>Upload data in Tab 1 first.</p>")
 apply_config_btn = widgets.Button(
     description='✅ Apply Configuration',
     button_style='primary',
@@ -77,10 +75,9 @@ config_summary_output = widgets.Output()
 with config_summary_output:
     display(HTML("<p style='color:#888;'>Configure metrics to see summary.</p>"))
 
-phase2_box = widgets.VBox([
-    widgets.HTML("<h2>🔧 Phase 2: Configure Each Metric</h2>"),
-    widgets.HTML("<p>For every numeric column, set:</p>"),
-    widgets.HTML("<ul><li><b>Direction:</b> Is higher better, or lower better?</li><li><b>Pillar:</b> Which VAE bucket does this metric belong to? (Or <code>Ignore</code> / <code>Switching</code>)</li></ul>"),
+tab2 = widgets.VBox([
+    widgets.HTML("<h2>🔧 Configure Each Metric</h2>"),
+    widgets.HTML("<p>Set <b>Direction</b> (higher/lower is better) and <b>Pillar</b> (Access, Value, Evidence, Switching, Ignore) for each metric.</p>"),
     config_vbox,
     widgets.HBox([apply_config_btn, config_status]),
     widgets.HTML("<h4>Configuration Summary</h4>"),
@@ -88,7 +85,7 @@ phase2_box = widgets.VBox([
 ])
 
 # ═══════════════════════════════════════════════════════════════════════
-# PHASE 4: SCORE COMPUTATION
+# TAB 3: COMPUTE SCORES (equal weights — no custom weighting yet)
 # ═══════════════════════════════════════════════════════════════════════
 
 compute_btn = widgets.Button(
@@ -97,15 +94,15 @@ compute_btn = widgets.Button(
     layout=widgets.Layout(width='200px'),
     disabled=True
 )
-compute_status = widgets.HTML(value="<p>Configure metrics in Phase 2 first.</p>")
+compute_status = widgets.HTML(value="<p>Apply configuration in Tab 2 first.</p>")
 
 scores_output = widgets.Output()
 with scores_output:
     display(HTML("<p style='color:#888;'>Compute scores to see results.</p>"))
 
-phase4_box = widgets.VBox([
-    widgets.HTML("<h2>📊 Phase 4: Compute Traction Scores</h2>"),
-    widgets.HTML("<p>Scores are computed as <b>weighted averages</b> per pillar, then combined into a Traction Proxy.</p>"),
+tab3 = widgets.VBox([
+    widgets.HTML("<h2>📊 Compute Traction Scores</h2>"),
+    widgets.HTML("<p><b>Equal weights used</b> (all metrics in a pillar weighted equally). Custom weighting comes in Prompt 2.</p>"),
     widgets.HBox([compute_btn, compute_status]),
     widgets.HTML("<h4>Competitor Scores</h4>"),
     scores_output
@@ -115,7 +112,7 @@ phase4_box = widgets.VBox([
 # ASSEMBLE TABS
 # ═══════════════════════════════════════════════════════════════════════
 
-tabs = widgets.Tab(children=[phase1_box, phase2_box, phase4_box])
+tabs = widgets.Tab(children=[tab1, tab2, tab3])
 tabs.set_title(0, '📁 Upload & Preview')
 tabs.set_title(1, '🔧 Configure Metrics')
 tabs.set_title(2, '📊 Compute Scores')
@@ -125,12 +122,11 @@ tabs.set_title(2, '📊 Compute Scores')
 # ═══════════════════════════════════════════════════════════════════════
 
 def identify_firm_column(df):
-    """Heuristic: first column that looks like firm names (object dtype, unique values ~ row count)."""
     for col in df.columns:
         if pd.api.types.is_string_dtype(df[col]) or df[col].dtype == 'object':
             if df[col].nunique() >= min(2, len(df)) and df[col].nunique() <= len(df):
                 return col
-    return df.columns[0]  # fallback
+    return df.columns[0]
 
 def handle_upload(change):
     global state
@@ -145,7 +141,6 @@ def handle_upload(change):
         firm_col = identify_firm_column(df)
         state['firm_col'] = firm_col
 
-        # Build preview
         html = df.to_html(index=False, border=0)
         styled = f"""
         <div style="overflow-x:auto; max-width:100%; border:1px solid #ddd; border-radius:4px; padding:8px;">
@@ -166,33 +161,28 @@ def handle_upload(change):
         info = f"""
         <p><b>✅ Loaded:</b> {len(df)} firms × {len(df.columns)} columns</p>
         <p><b>Firm column:</b> <code>{firm_col}</code></p>
-        <p><b>Numeric metrics:</b> {len(numeric_cols)} ({', '.join(numeric_cols)})</p>
+        <p><b>Numeric metrics:</b> {len(numeric_cols)}</p>
         <p><b>Firms:</b> {', '.join(df[firm_col].astype(str).tolist())}</p>
         """
         info_box.value = info
         status.value = "<p style='color:green;'>✅ CSV loaded successfully</p>"
 
-        # ── Build Phase 2 config widgets dynamically ──
         build_config_widgets(df, firm_col)
         apply_config_btn.disabled = False
-        config_status.value = "<p style='color:green;'>Ready — configure each metric below.</p>"
+        config_status.value = "<p style='color:green;'>Ready — configure each metric.</p>"
 
     except Exception as e:
         status.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
 
 def build_config_widgets(df, firm_col):
-    """Build direction + pillar dropdowns for each numeric column."""
     numeric_cols = [c for c in df.columns if c != firm_col and pd.api.types.is_numeric_dtype(df[c])]
-
     rows = []
-    # Header row
     rows.append(widgets.HBox([
         widgets.HTML("<b>Metric</b>", layout=widgets.Layout(width='220px')),
         widgets.HTML("<b>Direction</b>", layout=widgets.Layout(width='150px')),
-        widgets.HTML("<b>Pillar / Bucket</b>", layout=widgets.Layout(width='180px')),
-        widgets.HTML("<b>Sample Value</b>", layout=widgets.Layout(width='120px'))
+        widgets.HTML("<b>Pillar</b>", layout=widgets.Layout(width='150px')),
+        widgets.HTML("<b>Sample</b>", layout=widgets.Layout(width='100px'))
     ]))
-
     for col in numeric_cols:
         sample_val = df[col].iloc[0] if len(df) > 0 else 'N/A'
         direction_dd = widgets.Dropdown(
@@ -203,18 +193,16 @@ def build_config_widgets(df, firm_col):
         pillar_dd = widgets.Dropdown(
             options=['Access', 'Value', 'Evidence', 'Switching', 'Ignore'],
             value='Value',
-            layout=widgets.Layout(width='140px')
+            layout=widgets.Layout(width='130px')
         )
-        direction_dd._metric_name = col  # tag for retrieval
+        direction_dd._metric_name = col
         pillar_dd._metric_name = col
-
         rows.append(widgets.HBox([
             widgets.HTML(f"<code>{col}</code>", layout=widgets.Layout(width='220px')),
             direction_dd,
             pillar_dd,
-            widgets.HTML(f"<span style='color:#888;'>{sample_val}</span>", layout=widgets.Layout(width='120px'))
+            widgets.HTML(f"<span style='color:#888;'>{sample_val}</span>", layout=widgets.Layout(width='100px'))
         ]))
-
     config_vbox.children = rows
 
 def handle_apply_config(b):
@@ -225,23 +213,18 @@ def handle_apply_config(b):
         config_status.value = "<p style='color:red;'>❌ Upload data first.</p>"
         return
 
-    numeric_cols = [c for c in df.columns if c != firm_col and pd.api.types.is_numeric_dtype(df[c])]
     meta = {}
-
-    # Extract settings from dropdown widgets
-    for row in config_vbox.children[1:]:  # skip header
+    for row in config_vbox.children[1:]:
         col_name = row.children[0].value.replace('<code>', '').replace('</code>', '')
-        direction = row.children[1].value  # 'higher' or 'lower'
+        direction = row.children[1].value
         pillar = row.children[2].value
         meta[col_name] = {'direction': direction, 'pillar': pillar}
 
     state['metric_meta'] = meta
 
-    # Build configured dataframe (reverse lower-is-better metrics)
     df_cfg = df.copy()
     for col, settings in meta.items():
         if settings['direction'] == 'lower':
-            # Reverse: new = max - raw + min  (so smallest becomes largest)
             cmin, cmax = df_cfg[col].min(), df_cfg[col].max()
             if cmax > cmin:
                 df_cfg[col + '_reversed'] = cmax - df_cfg[col] + cmin
@@ -250,11 +233,10 @@ def handle_apply_config(b):
 
     state['df_configured'] = df_cfg
 
-    # Summary
     summary_lines = ["<h4>Metric Configuration Summary</h4>", "<table style='font-size:12px; border-collapse:collapse;'>",
                      "<tr style='background:#e8f4f8;'><th>Metric</th><th>Direction</th><th>Pillar</th></tr>"]
     for col, settings in meta.items():
-        rev_tag = " (reversed)" if settings['direction'] == 'lower' else ""
+        rev_tag = " ↩️ reversed" if settings['direction'] == 'lower' else ""
         summary_lines.append(f"<tr><td><code>{col}</code>{rev_tag}</td><td>{settings['direction']}</td><td>{settings['pillar']}</td></tr>")
     summary_lines.append("</table>")
 
@@ -262,10 +244,9 @@ def handle_apply_config(b):
         clear_output()
         display(HTML("".join(summary_lines)))
 
-    config_status.value = f"<p style='color:green;'>✅ Configuration applied for {len(meta)} metrics.</p>"
+    config_status.value = f"<p style='color:green;'>✅ {len(meta)} metrics configured. Ready to compute.</p>"
     compute_btn.disabled = False
-    compute_status.value = "<p style='color:green;'>Ready to compute scores.</p>"
-
+    compute_status.value = "<p style='color:green;'>Click Compute to see equal-weight scores.</p>"
     tabs.selected_index = 2
 
 def handle_compute(b):
@@ -275,43 +256,31 @@ def handle_compute(b):
     meta = state['metric_meta']
 
     if df is None or not meta:
-        compute_status.value = "<p style='color:red;'>❌ Apply configuration in Phase 2 first.</p>"
+        compute_status.value = "<p style='color:red;'>❌ Apply configuration first.</p>"
         return
 
     try:
-        # ── Normalize all active metrics to 0-1 ──
+        # Normalize all active metrics to 0-1 (equal weights — no custom weighting in Prompt 1)
         df_norm = df.copy()
-        active_metrics = []  # list of (original_col, effective_col, pillar)
+        active_metrics = []
 
         for col, settings in meta.items():
             if settings['pillar'] == 'Ignore':
                 continue
 
-            # Determine effective column name (reversed if needed)
-            if settings['direction'] == 'lower':
-                eff_col = col + '_reversed'
-            else:
-                eff_col = col
-
-            # Min-max normalize to [0, 1]
+            eff_col = col + '_reversed' if settings['direction'] == 'lower' else col
             cmin, cmax = df_norm[eff_col].min(), df_norm[eff_col].max()
             if cmax > cmin:
                 df_norm[col + '_norm'] = (df_norm[eff_col] - cmin) / (cmax - cmin)
             else:
                 df_norm[col + '_norm'] = 0.5
-
             active_metrics.append((col, col + '_norm', settings['pillar']))
 
-        state['df_normalized'] = df_norm
-
-        # ── Compute pillar scores per firm ──
-        firms = df_norm[firm_col].values
+        # Compute pillar scores (simple average = equal weights)
         results = []
-
         for idx, row in df_norm.iterrows():
             firm_name = row[firm_col]
 
-            # Collect normalized values by pillar
             access_vals = [row[m[1]] for m in active_metrics if m[2] == 'Access']
             value_vals = [row[m[1]] for m in active_metrics if m[2] == 'Value']
             evidence_vals = [row[m[1]] for m in active_metrics if m[2] == 'Evidence']
@@ -322,7 +291,6 @@ def handle_compute(b):
             evidence_score = np.mean(evidence_vals) if evidence_vals else 0
             switching_score = np.mean(switching_vals) if switching_vals else 0
 
-            # Traction Proxy = Access × Value × Evidence
             traction_proxy = access_score * value_score * evidence_score
 
             results.append({
@@ -337,28 +305,24 @@ def handle_compute(b):
         df_scored = pd.DataFrame(results)
         state['df_scored'] = df_scored
 
-        # ── Display results ──
         with scores_output:
             clear_output()
 
-            # Rankings
-            df_scored_sorted = df_scored.sort_values('Traction_Proxy', ascending=False).reset_index(drop=True)
+            df_sorted = df_scored.sort_values('Traction_Proxy', ascending=False).reset_index(drop=True)
 
-            display(HTML("<h4>🏆 Traction Proxy Ranking</h4>"))
+            display(HTML("<h4>🏆 Traction Proxy Ranking (Equal Weights)</h4>"))
             rank_html = "<ol>"
-            for _, r in df_scored_sorted.iterrows():
+            for _, r in df_sorted.iterrows():
                 rank_html += f"<li><b>{r[firm_col]}</b>: Traction = {r['Traction_Proxy']:.4f} (A={r['Access_Score']:.3f}, V={r['Value_Score']:.3f}, E={r['Evidence_Score']:.3f})</li>"
             rank_html += "</ol>"
             display(HTML(rank_html))
 
-            # Full table
             display(HTML("<h4>📊 Full Score Table</h4>"))
             display(df_scored.style.set_properties(**{'font-size': '11px'}).set_table_styles([
                 {'selector': 'th', 'props': [('background-color', '#e8f4f8'), ('font-weight', 'bold')]},
                 {'selector': 'td', 'props': [('border', '1px solid #eee')]}
             ]).background_gradient(subset=['Traction_Proxy'], cmap='RdYlGn'))
 
-            # Bar chart
             fig, ax = plt.subplots(figsize=(10, 5))
             x = np.arange(len(df_scored))
             width = 0.2
@@ -369,7 +333,7 @@ def handle_compute(b):
             ax.set_xticks(x)
             ax.set_xticklabels(df_scored[firm_col], rotation=15, ha='right')
             ax.set_ylabel('Score (0-1 scale)', fontsize=11)
-            ax.set_title('Competitor Traction Scores by Pillar', fontsize=12, fontweight='bold')
+            ax.set_title('Competitor Traction Scores (Equal Weights)', fontsize=12, fontweight='bold')
             ax.legend(loc='best')
             ax.set_ylim(0, 1.05)
             ax.grid(True, alpha=0.3, axis='y')
@@ -377,7 +341,7 @@ def handle_compute(b):
             display(fig)
             plt.close(fig)
 
-        compute_status.value = f"<p style='color:green;'>✅ Computed scores for {len(df_scored)} firms.</p>"
+        compute_status.value = f"<p style='color:green;'>✅ Computed equal-weight scores for {len(df_scored)} firms.</p>"
 
     except Exception as e:
         import traceback
@@ -391,5 +355,5 @@ compute_btn.on_click(handle_compute)
 
 # ── Display ───────────────────────────────────────────────────────────
 display(widgets.HTML("<h1>📊 Competitor Traction Estimator</h1>"))
-display(widgets.HTML("<p><b>Upload a Feature Parity Matrix → Configure metrics → Compute Traction scores.</b></p>"))
+display(widgets.HTML("<p><b>Prompt 1:</b> Upload → Configure → Compute with <u>equal weights</u>. Custom weighting comes in Prompt 2.</p>"))
 display(tabs)
