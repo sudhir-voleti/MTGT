@@ -26,7 +26,7 @@ def get_creds_path():
         import tempfile
         creds_json = userdata.get('GOOGLE_CREDS_JSON')
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            f.write(creds_json)
+            f.write(google_creds_json)
             return f.name
     except:
         pass
@@ -35,7 +35,7 @@ def get_creds_path():
 
 CREDS_PATH = get_creds_path()
 if not CREDS_PATH:
-    raise FileNotFoundError("google_creds.json not found. Upload to /content/ or set GOOGLE_CREDS in Colab secrets.")
+    raise FileNotFoundError("google_creds.json not found. Upload to /content/ or set GOOGLE_CREDS_JSON in Colab secrets.")
 
 LEC_ID = "Lec03"
 
