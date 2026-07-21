@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
 """
-MTGT Lec03 Factor Analysis Quiz — Gradio "Submit All" version
-Upload to GitHub, pull into Colab, launch with share=True.
-Students get public URL only. No code/secrets visible.
+MTGT Lec03 Factor Analysis Quiz — Gradio "Submit All"
+Usage in Colab:
+    import requests
+    exec(requests.get("https://raw.githubusercontent.com/sudhir-voleti/MTGT/main/quiz/lec03_banm.py").text)
 """
 
 import gradio as gr
@@ -13,13 +13,11 @@ import os
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
 SHEET_NAME = "BANM_Class_responses"
-CREDS_PATH = "/content/google_creds.json"  # Colab default
-if not os.path.exists(CREDS_PATH):
-    CREDS_PATH = "/Users/sudhirvoleti/teaching_trials/production/MTGT/assets/google_creds.json"
+CREDS_PATH = "/content/google_creds.json"
 
 LEC_ID = "Lec03"
 
-# ── QUESTIONS ────────────────────────────────────────────────────────────────
+# ── QUESTIONS ──────────────────────────────────────────────────────────────
 QUESTIONS = [
     {
         "q_id": "q1",
@@ -60,7 +58,6 @@ QUESTIONS = [
 
 # ── GOOGLE SHEETS ───────────────────────────────────────────────────────────
 def append_to_sheet(rows):
-    """Append multiple rows to the Google Sheet."""
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(CREDS_PATH, scopes=scope)
     client = gspread.authorize(creds)
@@ -72,21 +69,20 @@ def append_to_sheet(rows):
 
 # ── SUBMIT HANDLER ──────────────────────────────────────────────────────────
 def submit_all(student_name, email, reg_id, *answers):
-    """Submit all answers in one batch."""
     if not student_name or not email:
         return "ERROR: Name and Email are required."
-
+    
     if "@" not in email:
         return "ERROR: Valid email required."
-
+    
     rows = []
     submitted = 0
     skipped = 0
-
+    
     for i, ans in enumerate(answers):
         q_id = QUESTIONS[i]["q_id"]
         if ans and ans.strip():
-            row = [
+            rows.append([
                 datetime.now().isoformat(),
                 student_name.strip(),
                 email.strip().lower(),
@@ -94,67 +90,58 @@ def submit_all(student_name, email, reg_id, *answers):
                 LEC_ID,
                 q_id,
                 ans.strip()
-            ]
-            rows.append(row)
+            ])
             submitted += 1
         else:
             skipped += 1
-
+    
     if submitted == 0:
         return "ERROR: No answers provided. Please answer at least one question."
-
+    
     try:
         append_to_sheet(rows)
-        return f"✓ Submitted {submitted} answer(s) for {LEC_ID}. Skipped {skipped} empty. You may close this window."
+        return f"✓ Submitted {submitted} answer(s) for {LEC_ID}. Skipped {skipped} empty."
     except Exception as e:
         return f"✗ Submit failed: {str(e)}"
 
 # ── GRADIO UI ────────────────────────────────────────────────────────────────
-def build_ui():
-    with gr.Blocks(title=f"MTGT {LEC_ID} Quiz") as demo:
-        gr.Markdown(f"# MTGT {LEC_ID}: Factor Analysis In-Class Quiz")
-        gr.Markdown("Answer in 2–4 short sentences. Be precise. Justify where asked. Submit all at once.")
-
-        # Student info
+with gr.Blocks(title=f"MTGT {LEC_ID} Quiz") as demo:
+    gr.Markdown(f"# MTGT {LEC_ID}: Factor Analysis In-Class Quiz")
+    gr.Markdown("Answer in 2–4 short sentences. Be precise. Justify where asked. Submit all at once.")
+    
+    with gr.Row():
+        student_name = gr.Textbox(label="Full Name", placeholder="Your name")
+        email = gr.Textbox(label="Email", placeholder="your.email@isb.edu")
+        reg_id = gr.Textbox(label="Reg ID (optional)", placeholder="")
+    
+    gr.Markdown("---")
+    
+    answer_inputs = []
+    for q in QUESTIONS:
         with gr.Row():
-            student_name = gr.Textbox(label="Full Name", placeholder="Your name")
-            email = gr.Textbox(label="Email", placeholder="your.email@isb.edu")
-            reg_id = gr.Textbox(label="Reg ID (optional)", placeholder="")
+            with gr.Column(scale=1):
+                gr.Markdown(f"**{q['q_id'].upper()}**")
+            with gr.Column(scale=3):
+                ans = gr.Textbox(
+                    label=f"{q['text'][:120]}...",
+                    info=q["rubric"][:100] + "...",
+                    placeholder="Type your answer here...",
+                    lines=3
+                )
+                answer_inputs.append(ans)
+    
+    gr.Markdown("---")
+    
+    submit_btn = gr.Button("Submit All Answers", variant="primary", size="lg")
+    status = gr.Markdown(value="")
+    
+    submit_btn.click(
+        submit_all,
+        inputs=[student_name, email, reg_id] + answer_inputs,
+        outputs=status
+    )
+    
+    gr.Markdown("---")
+    gr.Markdown("*Only non-empty answers are submitted. Answer any subset of questions.*")
 
-        gr.Markdown("---")
-
-        # Question inputs
-        answer_inputs = []
-        for q in QUESTIONS:
-            with gr.Row():
-                with gr.Column(scale=1):
-                    gr.Markdown(f"**{q['q_id'].upper()}** ({q['rubric'][:80]}...)")
-                with gr.Column(scale=3):
-                    ans = gr.Textbox(
-                        label=q['text'],
-                        placeholder="Type your answer here...",
-                        lines=3
-                    )
-                    answer_inputs.append(ans)
-
-        gr.Markdown("---")
-
-        # Submit all
-        submit_btn = gr.Button("Submit All Answers", variant="primary", size="lg")
-        status = gr.Markdown(value="")
-
-        submit_btn.click(
-            submit_all,
-            inputs=[student_name, email, reg_id] + answer_inputs,
-            outputs=status
-        )
-
-        gr.Markdown("---")
-        gr.Markdown("*Only non-empty answers will be submitted. You can answer any subset of questions.*")
-
-    return demo
-
-# ── ENTRY POINT ──────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    demo = build_ui()
-    demo.launch(share=True, debug=True)
+demo.launch(share=True, debug=True)
