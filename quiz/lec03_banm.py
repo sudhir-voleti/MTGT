@@ -17,42 +17,35 @@ CREDS_PATH = "/content/google_creds.json"
 
 LEC_ID = "Lec03"
 
-# ── QUESTIONS ──────────────────────────────────────────────────────────────
+# ── QUESTIONS ONLY (no rubrics) ────────────────────────────────────────────
 QUESTIONS = [
     {
         "q_id": "q1",
-        "text": "In the image reconstruction example (the smiling face), what happens to the quality of the reconstructed image as we increase the number of factors from 1 → 5 → 10 → 25? What does this illustrate about the relationship between number of factors and information retained?",
-        "rubric": "Image quality improves (early factors capture most structure); diminishing returns; first few factors retain maximum information."
+        "text": "In the image reconstruction example (the smiling face), what happens to the quality of the reconstructed image as we increase the number of factors from 1 → 5 → 10 → 25? What does this illustrate about the relationship between number of factors and information retained?"
     },
     {
         "q_id": "q2",
-        "text": "A factor is created by re-weighting a group of correlated variables. In the toothpaste example, three variables loaded highly on Factor 1 and three on Factor 2. What descriptive names would you give Factor 1 and Factor 2? Briefly justify your labels using the loading variables.",
-        "rubric": "Factor 1 = Health/Functional (Anti-cavity, Gum strengthen, Fill gaps); Factor 2 = Cosmetic/Sensory (Whiten teeth, Fresh breath). Accept close equivalents with justification."
+        "text": "A factor is created by re-weighting a group of correlated variables. In the toothpaste example, three variables loaded highly on Factor 1 and three on Factor 2. What descriptive names would you give Factor 1 and Factor 2? Briefly justify your labels using the loading variables."
     },
     {
         "q_id": "q3",
-        "text": "In the toothpaste factor solution, Factor Scores are scaled as standard normal (mean ≈ 0, SD ≈ 1). If a particular respondent has a high positive score on the 'Health Benefits' factor and a high negative score on the 'Cosmetic Benefits' factor, how would you describe this person's toothpaste preference? What kind of product positioning might appeal to them?",
-        "rubric": "Prefers functional/health benefits over cosmetic → position around cavity protection, gum health. Avoid whitening/breath claims."
+        "text": "In the toothpaste factor solution, Factor Scores are scaled as standard normal (mean ≈ 0, SD ≈ 1). If a particular respondent has a high positive score on the 'Health Benefits' factor and a high negative score on the 'Cosmetic Benefits' factor, how would you describe this person's toothpaste preference? What kind of product positioning might appeal to them?"
     },
     {
         "q_id": "q4",
-        "text": "In the mtcars example, the factor solution typically produces two clear factors (one related to power/performance and one related to economy/efficiency). Looking at the factor plot of cars, what does it mean if a car sits in the 'High Power + Low Economy' quadrant? Give one real-world managerial implication of this positioning.",
-        "rubric": "Performance-oriented but inefficient (large American cars). Implication: vulnerable to fuel price rises; need efficiency improvements or repositioning."
+        "text": "In the mtcars example, the factor solution typically produces two clear factors (one related to power/performance and one related to economy/efficiency). Looking at the factor plot of cars, what does it mean if a car sits in the 'High Power + Low Economy' quadrant? Give one real-world managerial implication of this positioning."
     },
     {
         "q_id": "q5",
-        "text": "Suppose you run Factor Analysis on a new dataset and the main variables loading highly on Factor 1 are: crypto_investment_ratio, trading_freq, risk_aversion (negative loading). What would you name Factor 1? Briefly justify and suggest one way a wealth management firm could use this factor.",
-        "rubric": "Name: 'Aggressive/Speculative Investor' or 'High-Risk Active Trader'. Justify via loadings. Use: high-risk growth portfolio or targeted messaging."
+        "text": "Suppose you run Factor Analysis on a new dataset and the main variables loading highly on Factor 1 are: crypto_investment_ratio, trading_freq, risk_aversion (negative loading). What would you name Factor 1? Briefly justify and suggest one way a wealth management firm could use this factor."
     },
     {
         "q_id": "q6",
-        "text": "In the manufacturing plant data, Factor 1 loads heavily on energy_consumption, material_waste, and carbon_emission_level. What would you name this factor? A plant scores very high on this factor but also high on 'Production & Quality'. What does this combination tell you about their current strategy, and what is your top recommendation?",
-        "rubric": "Name: 'Resource Inefficiency/Environmental Cost'. Interpretation: high quality at high resource cost → inefficient. Recommendation: improve energy/waste/emissions without sacrificing quality."
+        "text": "In the manufacturing plant data, Factor 1 loads heavily on energy_consumption, material_waste, and carbon_emission_level. What would you name this factor? A plant scores very high on this factor but also high on 'Production & Quality'. What does this combination tell you about their current strategy, and what is your top recommendation?"
     },
     {
         "q_id": "q7",
-        "text": "Factor Analysis reduces many variables into a smaller set of latent factors. Why is this useful for marketing managers? Give two concrete examples of how the resulting factors (or factor scores) can be used downstream (e.g., for segmentation, targeting, product design, or communication).",
-        "rubric": "Two solid uses: (1) factor scores for segmentation, (2) factors as variables in regression/clustering, (3) simplify questionnaire, (4) guide product design/messaging."
+        "text": "Factor Analysis reduces many variables into a smaller set of latent factors. Why is this useful for marketing managers? Give two concrete examples of how the resulting factors (or factor scores) can be used downstream (e.g., for segmentation, targeting, product design, or communication)."
     }
 ]
 
@@ -118,19 +111,17 @@ with gr.Blocks(title=f"MTGT {LEC_ID} Quiz") as demo:
     
     answer_inputs = []
     for q in QUESTIONS:
-        with gr.Row():
-            with gr.Column(scale=1):
-                gr.Markdown(f"**{q['q_id'].upper()}**")
-            with gr.Column(scale=3):
-                ans = gr.Textbox(
-                    label=f"{q['text'][:120]}...",
-                    info=q["rubric"][:100] + "...",
-                    placeholder="Type your answer here...",
-                    lines=3
-                )
-                answer_inputs.append(ans)
-    
-    gr.Markdown("---")
+        gr.Markdown(f"### {q['q_id'].upper()}")
+        gr.Markdown(q['text'])
+        
+        ans = gr.Textbox(
+            label="Your answer",
+            placeholder="Type your response here...",
+            lines=4
+        )
+        answer_inputs.append(ans)
+        
+        gr.Markdown("---")
     
     submit_btn = gr.Button("Submit All Answers", variant="primary", size="lg")
     status = gr.Markdown(value="")
@@ -141,7 +132,6 @@ with gr.Blocks(title=f"MTGT {LEC_ID} Quiz") as demo:
         outputs=status
     )
     
-    gr.Markdown("---")
     gr.Markdown("*Only non-empty answers are submitted. Answer any subset of questions.*")
 
 demo.launch(share=True, debug=True)
