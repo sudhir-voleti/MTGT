@@ -126,14 +126,27 @@ compute_btn = widgets.Button(
     disabled=True
 )
 compute_status = widgets.HTML(value="<p>Set weights in Phase 3 first.</p>")
-
+# INSERT THIS CODE BLOCK:
+offset_slider = widgets.FloatSlider(
+    value=0.0,
+    min=0.0,
+    max=1.0,
+    step=0.05,
+    description='Offset h:',
+    layout=widgets.Layout(width='300px')
+)
+offset_explain = widgets.HTML(
+    value="<p style='font-size:11px; color:#666;'>Traction = (V+h)×(A+h)×(E+h). Drag h>0 to rescue zero pillars. h=0 = pure multiplicative.</p>"
+)
 scores_output = widgets.Output()
 with scores_output:
     display(HTML("<p style='color:#888;'>Compute scores to see results.</p>"))
 
+# NEW:
 phase4_box = widgets.VBox([
     widgets.HTML("<h2>📊 Phase 4: Compute Traction Scores</h2>"),
     widgets.HTML("<p>Scores are <b>weighted averages</b> per pillar, then combined into a Traction Proxy.</p>"),
+    widgets.HBox([offset_slider, offset_explain]),
     widgets.HBox([compute_btn, compute_status]),
     widgets.HTML("<h4>Competitor Scores</h4>"),
     scores_output
@@ -475,8 +488,9 @@ def handle_compute(b):
             evidence_score = evidence_wsum / evidence_wtotal if evidence_wtotal > 0 else 0
             switching_score = switching_wsum / switching_wtotal if switching_wtotal > 0 else 0
 
-            traction_proxy = access_score * value_score * evidence_score
-
+            h = offset_slider.value
+            traction_proxy = (access_score + h) * (value_score + h) * (evidence_score + h)
+    
             results.append({
                 firm_col: firm_name,
                 'Access_Score': round(access_score, 4),
