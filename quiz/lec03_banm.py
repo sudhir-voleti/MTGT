@@ -24,7 +24,7 @@ def get_creds_path():
     try:
         from google.colab import userdata
         import tempfile
-        creds_json = userdata.get('GOOGLE_CREDS')
+        creds_json = userdata.get('GOOGLE_CREDS_JSON')
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             f.write(creds_json)
             return f.name
