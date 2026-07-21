@@ -65,7 +65,8 @@ QUESTIONS = [
 
 # ── GOOGLE SHEETS ───────────────────────────────────────────────────────────
 def append_to_sheet(rows):
-    scope = ["https://www.googleapis.com/auth/spreadsheets"]
+    scope = ["https://www.googleapis.com/auth/spreadsheets",
+         "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_file(CREDS_PATH, scopes=scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open(SHEET_NAME)
