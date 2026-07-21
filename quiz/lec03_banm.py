@@ -36,20 +36,6 @@ def get_creds_path():
 CREDS_PATH = get_creds_path()
 if not CREDS_PATH:
     raise FileNotFoundError("google_creds.json not found. Upload to /content/ or set GOOGLE_CREDS in Colab secrets.")
-In your Colab secrets panel:
-Name: GOOGLE_CREDS
-Value: The entire JSON content of google_creds.json (copy-paste the file contents)
-Then in Colab:
-Python
-import requests
-exec(requests.get("https://raw.githubusercontent.com/sudhir-voleti/MTGT/main/quiz/lec03_banm.py").text)
-No file upload needed. The code auto-detects secrets.
-To update your GitHub repo:
-Edit quiz/lec03_banm.py
-Replace the CREDS_PATH line with the get_creds_path() function above
-Commit and push
-Want me to give you the full updated file to paste into GitHub?
-
 
 LEC_ID = "Lec03"
 
