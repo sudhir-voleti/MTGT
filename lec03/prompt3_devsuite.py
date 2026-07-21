@@ -135,6 +135,19 @@ vuln_method = widgets.Dropdown(
     layout=widgets.Layout(width='280px')
 )
 
+# INSERT THIS CODE BLOCK:
+offset_slider = widgets.FloatSlider(
+    value=0.0,
+    min=0.0,
+    max=1.0,
+    step=0.05,
+    description='Offset h:',
+    layout=widgets.Layout(width='300px')
+)
+offset_explain = widgets.HTML(
+    value="<p style='font-size:11px; color:#666;'>Traction = (V+h)×(A+h)×(E+h). Drag h>0 to rescue zero pillars. h=0 = pure multiplicative.</p>"
+)
+
 compute_btn = widgets.Button(
     description='📊 Compute Traction & Vulnerability',
     button_style='success',
@@ -149,10 +162,11 @@ with scores_output:
 
 phase4_box = widgets.VBox([
     widgets.HTML("<h2>📊 Phase 4: Compute Traction & Vulnerability</h2>"),
-    widgets.HTML("<p>Choose how Traction Proxy is computed and how Vulnerability is defined.</p>"),
+    widgets.HTML("<p>Choose Traction model, offset, and Vulnerability definition.</p>"),
     widgets.HBox([traction_model, vuln_method]),
+    widgets.HBox([offset_slider, offset_explain]),
     widgets.HBox([compute_btn, compute_status]),
-    widgets.HTML("<h4>Competitor Scores & Rankings</h4>"),
+    widgets.HTML("<h4>Results</h4>"),
     scores_output
 ])
 
@@ -459,11 +473,11 @@ def handle_compute(b):
             switching_score = switching_wsum / switching_wtotal if switching_wtotal > 0 else 0
 
             # Traction Proxy based on model
+            h = offset_slider.value
             if model == 'multiplicative':
-                traction_proxy = access_score * value_score * evidence_score
-            else:  # weighted_sum
-                # Average of the three pillar scores (equal pillars)
-                traction_proxy = (access_score + value_score + evidence_score) / 3
+                traction_proxy = (access_score + h) * (value_score + h) * (evidence_score + h)
+            else:
+                traction_proxy = (access_score + value_score + evidence_score) / 3                        
 
             results.append({
                 firm_col: firm_name,
