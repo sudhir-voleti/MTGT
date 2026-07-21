@@ -96,13 +96,28 @@ compute_btn = widgets.Button(
 )
 compute_status = widgets.HTML(value="<p>Apply configuration in Tab 2 first.</p>")
 
+# INSERT THIS CODE BLOCK:
+offset_slider = widgets.FloatSlider(
+    value=0.0,
+    min=0.0,
+    max=1.0,
+    step=0.05,
+    description='Offset h:',
+    layout=widgets.Layout(width='300px')
+)
+offset_explain = widgets.HTML(
+    value="<p style='font-size:11px; color:#666;'>Traction = (V+h)×(A+h)×(E+h). Drag h>0 to rescue zero pillars. h=0 = pure multiplicative.</p>"
+)
+
 scores_output = widgets.Output()
 with scores_output:
     display(HTML("<p style='color:#888;'>Compute scores to see results.</p>"))
 
+# NEW:
 tab3 = widgets.VBox([
     widgets.HTML("<h2>📊 Compute Traction Scores</h2>"),
     widgets.HTML("<p><b>Equal weights used</b> (all metrics in a pillar weighted equally). Custom weighting comes in Prompt 2.</p>"),
+    widgets.HBox([offset_slider, offset_explain]),
     widgets.HBox([compute_btn, compute_status]),
     widgets.HTML("<h4>Competitor Scores</h4>"),
     scores_output
@@ -291,7 +306,8 @@ def handle_compute(b):
             evidence_score = np.mean(evidence_vals) if evidence_vals else 0
             switching_score = np.mean(switching_vals) if switching_vals else 0
 
-            traction_proxy = access_score * value_score * evidence_score
+            h = offset_slider.value
+            traction_proxy = (access_score + h) * (value_score + h) * (evidence_score + h)
 
             results.append({
                 firm_col: firm_name,
