@@ -206,15 +206,10 @@ display(HTML("""
     <li>Which segment is low on everything? Those are your <strong>Laggards</strong>. Ignore them.</li>
   </ul>
 
-  <div class="pause-box">
-    <h3>Pause and Predict (30 seconds)</h3>
+  <h3>Pause and Predict (30 seconds)</h3>
     <p>
-      Look at your four segments. Write down your guess for each one <strong>before</strong> you click Auto-Suggest.
+      Look at your four segments. Write down your guess for each one <strong>before</strong> you click Auto-Suggest. Run the next cell when ready.
     </p>
-  </div>
-
-  <div class="cta">
-    Run the next cell when you are ready.
-  </div>
+    
 </div>
 """))
