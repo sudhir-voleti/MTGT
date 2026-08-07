@@ -125,7 +125,7 @@ display(HTML("""
 </style>
 
 <div class="mtgt-card">
-  <h1>🎯 Step 2: Map Your Segments to Moore's World</h1>
+  <h1> Step 2: Map Your Segments to Moore's World</h1>
   <div class="subtitle">From algorithmic clusters to strategic identities</div>
 
   <p><strong>Class,</strong></p>
@@ -203,7 +203,7 @@ display(HTML("""
   </ul>
 
   <div class="pause-box">
-    <h3>🛑 Pause and Predict (30 seconds)</h3>
+    <h3> Pause and Predict (30 seconds)</h3>
     <p>
       Look at your four segments. Write down your guess for each one <strong>before</strong> you click Auto-Suggest.
     </p>
