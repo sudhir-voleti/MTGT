@@ -1,8 +1,6 @@
-<!-- =================================================================== -->
-<!-- LEC08 THEORY CARD → CASELET FORMAT                                 -->
-<!-- Drop-in replacement                                                -->
-<!-- =================================================================== -->
+from IPython.display import HTML, display
 
+display(HTML("""
 <style>
   .caselet-body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
@@ -74,10 +72,10 @@
 
 <div class="caselet-body">
 
-  <h1>Step 2: Map Your Segments to Moore’s World</h1>
+  <h1>Step 2: Map Your Segments to Moore's World</h1>
   <div class="subtitle">From algorithmic clusters to strategic identities</div>
 
-  <p>In the previous step we uncovered four hidden tribes inside Hridayam’s survey data.</p>
+  <p>In the previous step we uncovered four hidden tribes inside Hridayam's survey data.</p>
   <p>The algorithm labelled them Segment 1, Segment 2, and so on.</p>
   <p>As strategists we now need to give each tribe a real identity that links to how technology markets actually buy.</p>
 
@@ -96,27 +94,27 @@
       <tr>
         <td><strong>Innovators</strong></td>
         <td>The Techies</td>
-        <td>“I’ll try anything new. I don’t need proof.”</td>
+        <td>"I'll try anything new. I don't need proof."</td>
       </tr>
       <tr>
         <td><strong>Early Adopters</strong></td>
         <td>The Visionaries</td>
-        <td>“I see the future. I want competitive advantage.”</td>
+        <td>"I see the future. I want competitive advantage."</td>
       </tr>
       <tr>
         <td><strong>Early Majority</strong></td>
         <td>The Pragmatists</td>
-        <td>“I’ll buy only when it’s proven, easy, and safe.”</td>
+        <td>"I'll buy only when it's proven, easy, and safe."</td>
       </tr>
       <tr>
         <td><strong>Late Majority</strong></td>
         <td>The Skeptics</td>
-        <td>“I’ll buy only when everyone else already has.”</td>
+        <td>"I'll buy only when everyone else already has."</td>
       </tr>
       <tr>
         <td><strong>Laggards</strong></td>
         <td>The Resisters</td>
-        <td>“I don’t want this. Go away.”</td>
+        <td>"I don't want this. Go away."</td>
       </tr>
     </tbody>
   </table>
@@ -131,12 +129,12 @@
 
   <h2>2. What You Will Do Now</h2>
   <p>In the next cell a simple mapper will open.</p>
-  <p>For each of the four segments the algorithm discovered, you will assign it to one of Moore’s five categories.</p>
+  <p>For each of the four segments the algorithm discovered, you will assign it to one of Moore's five categories.</p>
 
   <p><strong>Before you run the mapper, look back at your segment profiles from Step 1 and ask:</strong></p>
   <ul>
     <li>Which segment scores high on Pioneer Drive and Risk Tolerance but low on Compliance? Those are likely your <strong>Visionaries</strong>.</li>
-    <li>Which segment demands Clinical Proof, Integration, and Privacy? Those are your <strong>Pragmatists</strong> — the other side of the chasm.</li>
+    <li>Which segment demands Clinical Proof, Integration, and Privacy? Those are your <strong>Pragmatists</strong> - the other side of the chasm.</li>
     <li>Which segment is low across the board? Those are your <strong>Laggards</strong>. They can be set aside for now.</li>
   </ul>
 
@@ -148,3 +146,4 @@
   </div>
 
 </div>
+"""))
