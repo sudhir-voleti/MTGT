@@ -133,12 +133,11 @@ display(HTML("""
   <h1>Step 2: Map Your Segments to Moore's World</h1>
   <div class="subtitle">From algorithmic clusters to strategic identities</div>
 
-  <p><strong>Class,</strong></p>
+  <p>Class,</p>
   <p>
-    In the last step, you discovered four hidden tribes inside Hridayam's survey data.
-    The algorithm gave them boring names -- <code>segment_1</code>, <code>segment_2</code>, and so on.
-    But <strong>you</strong> are the strategist now. Your job is to look at what each tribe
-    actually cares about and give them real identities.
+    In the last step, we discovered four hidden 'tribes' inside Hridayam's survey data.
+    The algo gave them boring names -- <i>segment_1</i>, <i>segment_2</i>, and so on.
+    But as strategists, we looked at what each segment actually cares about and gave them real identities.
   </p>
 
   <h2>The Theory in One Minute</h2>
@@ -202,8 +201,8 @@ display(HTML("""
     <strong>Before you run it, look at your segment profiles from Step 1.</strong> Ask yourself:
   </p>
   <ul>
-    <li>Which segment scores sky-high on <code>Pioneer.Drive</code> and <code>Risk.Tolerance</code> but low on <code>Compliance</code>? Those are your <strong>Visionaries</strong>.</li>
-    <li>Which segment demands <code>Clinical.Proof</code>, <code>Integration</code>, and <code>Privacy</code>? Those are your <strong>Pragmatists</strong> -- and they are the other side of the chasm.</li>
+    <li>Which segment scores sky-high on <i>Pioneer.Drive</i> and <i>Risk.Tolerance</i> but low on <i>Compliance</i>? Those are your <strong>Visionaries</strong>.</li>
+    <li>Which segment demands <i>Clinical.Proof</i>, <i>Integration</i>, and <i>Privacy</i>? Those are your <strong>Pragmatists</strong> -- and they are the other side of the chasm.</li>
     <li>Which segment is low on everything? Those are your <strong>Laggards</strong>. Ignore them.</li>
   </ul>
 
@@ -213,43 +212,6 @@ display(HTML("""
       Look at your four segments. Write down your guess for each one <strong>before</strong> you click Auto-Suggest.
     </p>
   </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th style="width:22%">Segment</th>
-        <th style="width:35%">My Guess (Moore Category)</th>
-        <th style="width:43%">Why?</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>segment_?</code></td>
-        <td><textarea rows="1" placeholder="e.g., Early Adopters"></textarea></td>
-        <td><textarea rows="1" placeholder="High Pioneer.Drive, low Compliance..."></textarea></td>
-      </tr>
-      <tr>
-        <td><code>segment_?</code></td>
-        <td><textarea rows="1" placeholder="e.g., Early Majority"></textarea></td>
-        <td><textarea rows="1" placeholder="Demands Clinical.Proof, Integration..."></textarea></td>
-      </tr>
-      <tr>
-        <td><code>segment_?</code></td>
-        <td><textarea rows="1" placeholder="e.g., Late Majority"></textarea></td>
-        <td><textarea rows="1" placeholder="Very high Risk Aversion..."></textarea></td>
-      </tr>
-      <tr>
-        <td><code>segment_?</code></td>
-        <td><textarea rows="1" placeholder="e.g., Laggards"></textarea></td>
-        <td><textarea rows="1" placeholder="Low on everything..."></textarea></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>
-    The algorithm found the clusters. <strong>You</strong> are assigning the strategic meaning.
-    This is the moment where data science becomes marketing strategy.
-  </p>
 
   <div class="cta">
     Run the next cell when you are ready.
