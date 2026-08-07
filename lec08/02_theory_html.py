@@ -1,149 +1,88 @@
-from IPython.display import HTML, display
+<!-- =================================================================== -->
+<!-- LEC08 THEORY CARD → CASELET FORMAT                                 -->
+<!-- Drop-in replacement                                                -->
+<!-- =================================================================== -->
 
-display(HTML("""
 <style>
-  .mtgt-card {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    border-radius: 16px;
-    padding: 36px 40px;
-    max-width: 900px;
-    margin: 20px auto;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
-    border: 1px solid #cbd5e1;
+  .caselet-body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
     color: #1e293b;
+    max-width: 860px;
+    margin: 0 auto;
   }
-  .mtgt-card h1 {
-    font-size: 32px;
-    font-weight: 800;
-    color: #0f172a;
-    margin-bottom: 8px;
-    letter-spacing: -0.5px;
+  .caselet-body h1 {
+    font-size: 1.55em;
+    color: #003366;
+    margin: 0 0 6px 0;
   }
-  .mtgt-card .subtitle {
-    font-size: 18px;
+  .caselet-body .subtitle {
+    font-size: 1.05em;
     color: #475569;
-    margin-bottom: 28px;
-    font-weight: 500;
+    margin-bottom: 22px;
   }
-  .mtgt-card h2 {
-    font-size: 22px;
-    font-weight: 700;
-    color: #1e40af;
+  .caselet-body h2 {
+    font-size: 1.2em;
+    color: #003366;
+    border-bottom: 2px solid #E37222;
+    padding-bottom: 4px;
     margin-top: 28px;
-    margin-bottom: 14px;
-    border-left: 5px solid #3b82f6;
-    padding-left: 14px;
   }
-  .mtgt-card p, .mtgt-card li {
-    font-size: 17px;
-    line-height: 1.7;
-    color: #334155;
+  .caselet-body h3 {
+    font-size: 1.05em;
+    color: #003366;
+    margin-top: 20px;
   }
-  .mtgt-card .callout {
-    background: #eff6ff;
-    border-left: 5px solid #3b82f6;
-    padding: 18px 22px;
-    border-radius: 0 10px 10px 0;
+  .caselet-body p {
+    margin: 10px 0;
+  }
+  .caselet-body .callout {
+    background: #f0f7ff;
+    border-left: 5px solid #003366;
+    padding: 14px 18px;
+    margin: 18px 0;
+  }
+  .caselet-body .pause-box {
+    background: #fffbeb;
+    border: 1px dashed #d97706;
+    padding: 16px 18px;
     margin: 22px 0;
-    font-size: 17px;
   }
-  .mtgt-card .callout strong {
-    color: #1e40af;
-  }
-  .mtgt-card table {
+  .caselet-body table {
     width: 100%;
     border-collapse: collapse;
-    margin: 20px 0;
-    font-size: 16px;
-    background: white;
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    font-size: 14.5px;
+    margin: 16px 0 20px;
   }
-  .mtgt-card th {
-    background: #1e40af;
+  .caselet-body th {
+    background-color: #003366;
     color: white;
-    padding: 14px 16px;
+    padding: 11px 14px;
     text-align: left;
-    font-weight: 600;
-    font-size: 15px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
+    border: 1px solid #003366;
   }
-  .mtgt-card td {
-    padding: 12px 16px;
-    border-bottom: 1px solid #e2e8f0;
-    color: #334155;
-    font-weight: 500;
+  .caselet-body td {
+    padding: 10px 14px;
+    border: 1px solid #d0d7de;
     vertical-align: top;
   }
-  .mtgt-card tr:last-child td {
-    border-bottom: none;
-  }
-  .mtgt-card tr:nth-child(even) {
-    background: #f8fafc;
-  }
-  .mtgt-card .pause-box {
-    background: #fffbeb;
-    border: 2px dashed #f59e0b;
-    border-radius: 12px;
-    padding: 24px 28px;
-    margin: 28px 0;
-  }
-  .mtgt-card .pause-box h3 {
-    margin: 0 0 10px 0;
-    color: #b45309;
-    font-size: 20px;
-    font-weight: 700;
-  }
-  .mtgt-card .pause-box p {
-    margin: 0;
-    color: #78350f;
-    font-size: 16px;
-  }
-  .mtgt-card textarea {
-    width: 100%;
-    min-height: 28px;
-    padding: 6px 8px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    font-size: 15px;
-    color: #334155;
-    background: #fff;
-    resize: vertical;
-    box-sizing: border-box;
-  }
-  .mtgt-card textarea:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
-  }
-  .mtgt-card .cta {
-    text-align: center;
-    margin-top: 32px;
-    font-size: 16px;
-    font-weight: 600;
-    color: #1e40af;
+  .caselet-body tr:nth-child(even) td {
+    background-color: #f8fafc;
   }
 </style>
 
-<div class="mtgt-card">
-  <h1>Step 2: Map Your Segments to Moore's World</h1>
+<div class="caselet-body">
+
+  <h1>Step 2: Map Your Segments to Moore’s World</h1>
   <div class="subtitle">From algorithmic clusters to strategic identities</div>
 
-  <p>Class,</p>
-  <p>
-    In the last step, we discovered four hidden 'tribes' inside Hridayam's survey data.
-    The algo gave them boring names -- <i>segment_1</i>, <i>segment_2</i>, and so on.
-    But as strategists, we looked at what each segment actually cares about and gave them real identities.
-  </p>
+  <p>In the previous step we uncovered four hidden tribes inside Hridayam’s survey data.</p>
+  <p>The algorithm labelled them Segment 1, Segment 2, and so on.</p>
+  <p>As strategists we now need to give each tribe a real identity that links to how technology markets actually buy.</p>
 
-  <h2>The Theory in One Minute</h2>
-  <p>
-    Geoffrey Moore says every technology market has five kinds of buyers, arranged in a line:
-  </p>
+  <h2>1. The Theory in One Minute</h2>
+  <p>Geoffrey Moore observed that every technology market contains five kinds of buyers arranged along an adoption curve:</p>
 
   <table>
     <thead>
@@ -157,59 +96,55 @@ display(HTML("""
       <tr>
         <td><strong>Innovators</strong></td>
         <td>The Techies</td>
-        <td>"I'll try anything new. I don't need proof."</td>
+        <td>“I’ll try anything new. I don’t need proof.”</td>
       </tr>
       <tr>
         <td><strong>Early Adopters</strong></td>
         <td>The Visionaries</td>
-        <td>"I see the future. I want competitive advantage."</td>
+        <td>“I see the future. I want competitive advantage.”</td>
       </tr>
       <tr>
         <td><strong>Early Majority</strong></td>
         <td>The Pragmatists</td>
-        <td>"I'll buy only when it's proven, easy, and safe."</td>
+        <td>“I’ll buy only when it’s proven, easy, and safe.”</td>
       </tr>
       <tr>
         <td><strong>Late Majority</strong></td>
         <td>The Skeptics</td>
-        <td>"I'll buy only when everyone else already has."</td>
+        <td>“I’ll buy only when everyone else already has.”</td>
       </tr>
       <tr>
         <td><strong>Laggards</strong></td>
         <td>The Resisters</td>
-        <td>"I don't want this. Go away."</td>
+        <td>“I don’t want this. Go away.”</td>
       </tr>
     </tbody>
   </table>
 
   <div class="callout">
-    <strong>Here is the crucial idea:</strong> The biggest gap in the entire market is not between any two random segments.
-    It is the gap between the <strong>Visionaries</strong> and the <strong>Pragmatists</strong>.
-    Moore calls this <strong>the chasm</strong>.
-    <br><br>
-    Why? Because Visionaries will buy an incomplete product. Pragmatists will not.
-    If you try to sell your D2C patch directly to a corporate HR department,
-    you are leaping across that chasm without a bridge. That is exactly what happened to Hridayam.
+    <p><strong>The critical idea:</strong> The biggest gap in the market is not between any two random segments.</p>
+    <p>It is the gap between the <strong>Visionaries</strong> and the <strong>Pragmatists</strong>.</p>
+    <p>Moore calls this <strong>the chasm</strong>.</p>
+    <p>Visionaries will buy an incomplete product. Pragmatists will not.</p>
+    <p>Trying to sell a D2C wearable patch straight into a corporate HR department is an attempt to leap that chasm without a bridge. That is precisely the trap Hridayam fell into.</p>
   </div>
 
-  <h2>What You Will Do Now</h2>
-  <p>
-    The code cell below will open a simple mapper. For each segment the algorithm found,
-    you will assign it to one of Moore's five categories.
-  </p>
-  <p>
-    <strong>Before you run it, look at your segment profiles from Step 1.</strong> Ask yourself:
-  </p>
+  <h2>2. What You Will Do Now</h2>
+  <p>In the next cell a simple mapper will open.</p>
+  <p>For each of the four segments the algorithm discovered, you will assign it to one of Moore’s five categories.</p>
+
+  <p><strong>Before you run the mapper, look back at your segment profiles from Step 1 and ask:</strong></p>
   <ul>
-    <li>Which segment scores sky-high on <i>Pioneer.Drive</i> and <i>Risk.Tolerance</i> but low on <i>Compliance</i>? Those are your <strong>Visionaries</strong>.</li>
-    <li>Which segment demands <i>Clinical.Proof</i>, <i>Integration</i>, and <i>Privacy</i>? Those are your <strong>Pragmatists</strong> -- and they are the other side of the chasm.</li>
-    <li>Which segment is low on everything? Those are your <strong>Laggards</strong>. Ignore them.</li>
+    <li>Which segment scores high on Pioneer Drive and Risk Tolerance but low on Compliance? Those are likely your <strong>Visionaries</strong>.</li>
+    <li>Which segment demands Clinical Proof, Integration, and Privacy? Those are your <strong>Pragmatists</strong> — the other side of the chasm.</li>
+    <li>Which segment is low across the board? Those are your <strong>Laggards</strong>. They can be set aside for now.</li>
   </ul>
 
-  <h3>Pause and Predict (30 seconds)</h3>
-    <p>
-      Look at your four segments. Write down your guess for each one <strong>before</strong> you click Auto-Suggest. Run the next cell when ready.
-    </p>
-    
+  <div class="pause-box">
+    <h3>Pause and Predict (30 seconds)</h3>
+    <p>Look at your four segments.</p>
+    <p>Write down your provisional mapping for each one <strong>before</strong> you click Auto-Suggest.</p>
+    <p>Run the next cell when ready.</p>
+  </div>
+
 </div>
-"""))
