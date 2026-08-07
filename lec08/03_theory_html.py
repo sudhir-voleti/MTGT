@@ -69,11 +69,12 @@ display(HTML("""
     background-color: #f8fafc;
   }
   .caselet-body .formula {
-    font-size: 1.25em;
+    font-size: 1.35em;
     font-weight: 700;
     text-align: center;
-    margin: 18px 0;
+    margin: 16px 0;
     color: #003366;
+    letter-spacing: 0.5px;
   }
 </style>
 
@@ -119,23 +120,55 @@ display(HTML("""
   </table>
 
   <div class="callout">
-    <p><strong>Here is the crucial part.</strong></p>
-    <p>Traction is not the sum of these pillars.</p>
+    <p>Here is the crucial part. Traction is not the sum of these pillars.</p>
     <p>It is the <strong>product</strong>:</p>
-    <p class="formula">Traction = Value &times; Access &times; Evidence</p>
-    <p>A near-zero score on any single pillar collapses overall traction, no matter how strong the other two pillars are.</p>
+    <p class="formula">Traction = V &times; A &times; E</p>
+    <p>Think about what multiplication means. If any single pillar drops to zero -- or even near zero -- the entire product collapses to zero.</p>
+    <p>A buyer who wants your product (high V) but cannot get it through procurement (A near 0) and sees no clinical validation (E near 0) does not buy a little. They buy <strong>nothing</strong>.</p>
+    <p>Addition would have been forgiving. Multiplication is brutal. That is why the chasm exists.</p>
   </div>
 
-  <h2>2. What You Will Diagnose Next</h2>
-  <p>In the cells that follow you will score each of your Moore-mapped segments on Value, Access, and Evidence.</p>
-  <p>Watch especially for segments that look attractive on size or CLV but carry a near-zero on one of the three pillars.</p>
-  <p>Those are the multiplication traps.</p>
+  <h2>2. What You Will Do Now</h2>
+  <p>The code cell below opens the Traction Diagnosis dashboard. You will:</p>
+  <ol>
+    <li>Assign each of the 12 survey items to one of the three pillars (V, A, or E).</li>
+    <li>The tool will compute per-segment scores and reveal which pillar collapses for the Pragmatists.</li>
+  </ol>
 
   <div class="pause-box">
-    <h3>Pause and Predict (30 seconds)</h3>
-    <p>Before you run the next cell, ask yourself:</p>
-    <p>Which of your segments is most likely to have a near-zero on Access or Evidence when sold into enterprise HR?</p>
-    <p>Write the name down. Then proceed.</p>
+    <h3>Pause and Predict</h3>
+    <p>Before you run the cell, look at your segment profiles from Step 1.</p>
+    <p>Which pillar do you think collapses when moving from Visionaries to Pragmatists? Write your prediction:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Segment</th>
+          <th>My Prediction: Collapsing Pillar</th>
+          <th>Why?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Visionaries / Early Adopters</td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>Pragmatists / Early Majority</td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>Skeptics / Late Majority</td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>Remember: the algorithm found the clusters. You are now diagnosing <strong>why one segment buys and another refuses</strong>. That is the difference between segmentation and strategy.</p>
+    <p>Run the next cell when you are ready.</p>
   </div>
 
 </div>
