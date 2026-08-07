@@ -72,10 +72,11 @@ display(HTML("""
     letter-spacing: 0.4px;
   }
   .mtgt-card td {
-    padding: 14px 16px;
+    padding: 12px 16px;
     border-bottom: 1px solid #e2e8f0;
     color: #334155;
     font-weight: 500;
+    vertical-align: top;
   }
   .mtgt-card tr:last-child td {
     border-bottom: none;
@@ -89,7 +90,6 @@ display(HTML("""
     border-radius: 12px;
     padding: 24px 28px;
     margin: 28px 0;
-    text-align: center;
   }
   .mtgt-card .pause-box h3 {
     margin: 0 0 10px 0;
@@ -102,37 +102,42 @@ display(HTML("""
     color: #78350f;
     font-size: 16px;
   }
-  .mtgt-card .action-btn {
-    display: inline-block;
-    background: #1e40af;
-    color: white;
-    padding: 14px 32px;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 16px;
-    margin-top: 10px;
-    text-decoration: none;
+  .mtgt-card textarea {
+    width: 100%;
+    min-height: 28px;
+    padding: 6px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    color: #334155;
+    background: #fff;
+    resize: vertical;
+    box-sizing: border-box;
   }
-  .mtgt-card .teaching-point {
-    background: #f0fdf4;
-    border-left: 5px solid #16a34a;
-    padding: 16px 20px;
-    border-radius: 0 10px 10px 0;
-    margin-top: 20px;
+  .mtgt-card textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+  }
+  .mtgt-card .cta {
+    text-align: center;
+    margin-top: 32px;
     font-size: 16px;
-    color: #14532d;
+    font-weight: 600;
+    color: #1e40af;
   }
 </style>
 
 <div class="mtgt-card">
-  <h1> Step 2: Map Your Segments to Moore's World</h1>
+  <h1>Step 2: Map Your Segments to Moore's World</h1>
   <div class="subtitle">From algorithmic clusters to strategic identities</div>
 
   <p><strong>Class,</strong></p>
   <p>
-    In the last step, you discovered four hidden tribes inside Hridayam's survey data. 
-    The algorithm gave them boring names — <code>segment_1</code>, <code>segment_2</code>, and so on. 
-    But <strong>you</strong> are the strategist now. Your job is to look at what each tribe 
+    In the last step, you discovered four hidden tribes inside Hridayam's survey data.
+    The algorithm gave them boring names -- <code>segment_1</code>, <code>segment_2</code>, and so on.
+    But <strong>you</strong> are the strategist now. Your job is to look at what each tribe
     actually cares about and give them real identities.
   </p>
 
@@ -179,18 +184,18 @@ display(HTML("""
   </table>
 
   <div class="callout">
-    <strong>Here is the crucial idea:</strong> The biggest gap in the entire market is not between any two random segments. 
-    It is the gap between the <strong>Visionaries</strong> and the <strong>Pragmatists</strong>. 
+    <strong>Here is the crucial idea:</strong> The biggest gap in the entire market is not between any two random segments.
+    It is the gap between the <strong>Visionaries</strong> and the <strong>Pragmatists</strong>.
     Moore calls this <strong>the chasm</strong>.
     <br><br>
-    Why? Because Visionaries will buy an incomplete product. Pragmatists will not. 
-    If you try to sell your D2C patch directly to a corporate HR department, 
+    Why? Because Visionaries will buy an incomplete product. Pragmatists will not.
+    If you try to sell your D2C patch directly to a corporate HR department,
     you are leaping across that chasm without a bridge. That is exactly what happened to Hridayam.
   </div>
 
   <h2>What You Will Do Now</h2>
   <p>
-    The code cell below will open a simple mapper. For each segment the algorithm found, 
+    The code cell below will open a simple mapper. For each segment the algorithm found,
     you will assign it to one of Moore's five categories.
   </p>
   <p>
@@ -198,12 +203,12 @@ display(HTML("""
   </p>
   <ul>
     <li>Which segment scores sky-high on <code>Pioneer.Drive</code> and <code>Risk.Tolerance</code> but low on <code>Compliance</code>? Those are your <strong>Visionaries</strong>.</li>
-    <li>Which segment demands <code>Clinical.Proof</code>, <code>Integration</code>, and <code>Privacy</code>? Those are your <strong>Pragmatists</strong> — and they are the other side of the chasm.</li>
+    <li>Which segment demands <code>Clinical.Proof</code>, <code>Integration</code>, and <code>Privacy</code>? Those are your <strong>Pragmatists</strong> -- and they are the other side of the chasm.</li>
     <li>Which segment is low on everything? Those are your <strong>Laggards</strong>. Ignore them.</li>
   </ul>
 
   <div class="pause-box">
-    <h3> Pause and Predict (30 seconds)</h3>
+    <h3>Pause and Predict (30 seconds)</h3>
     <p>
       Look at your four segments. Write down your guess for each one <strong>before</strong> you click Auto-Suggest.
     </p>
@@ -212,26 +217,42 @@ display(HTML("""
   <table>
     <thead>
       <tr>
-        <th>Segment</th>
-        <th>My Guess (Moore Category)</th>
-        <th>Why?</th>
+        <th style="width:22%">Segment</th>
+        <th style="width:35%">My Guess (Moore Category)</th>
+        <th style="width:43%">Why?</th>
       </tr>
     </thead>
     <tbody>
-      <tr><td><code>segment_?</code></td><td>?</td><td></td></tr>
-      <tr><td><code>segment_?</code></td><td>?</td><td></td></tr>
-      <tr><td><code>segment_?</code></td><td>?</td><td></td></tr>
-      <tr><td><code>segment_?</code></td><td>?</td><td></td></tr>
+      <tr>
+        <td><code>segment_?</code></td>
+        <td><textarea rows="1" placeholder="e.g., Early Adopters"></textarea></td>
+        <td><textarea rows="1" placeholder="High Pioneer.Drive, low Compliance..."></textarea></td>
+      </tr>
+      <tr>
+        <td><code>segment_?</code></td>
+        <td><textarea rows="1" placeholder="e.g., Early Majority"></textarea></td>
+        <td><textarea rows="1" placeholder="Demands Clinical.Proof, Integration..."></textarea></td>
+      </tr>
+      <tr>
+        <td><code>segment_?</code></td>
+        <td><textarea rows="1" placeholder="e.g., Late Majority"></textarea></td>
+        <td><textarea rows="1" placeholder="Very high Risk Aversion..."></textarea></td>
+      </tr>
+      <tr>
+        <td><code>segment_?</code></td>
+        <td><textarea rows="1" placeholder="e.g., Laggards"></textarea></td>
+        <td><textarea rows="1" placeholder="Low on everything..."></textarea></td>
+      </tr>
     </tbody>
   </table>
 
-  <div class="teaching-point">
-    <strong>Teaching point:</strong> The algorithm found the clusters. <em>You</em> are assigning the strategic meaning. 
+  <p>
+    The algorithm found the clusters. <strong>You</strong> are assigning the strategic meaning.
     This is the moment where data science becomes marketing strategy.
-  </div>
-
-  <p style="text-align:center; margin-top:32px;">
-    <span class="action-btn">▶ Run the next cell when you are ready</span>
   </p>
+
+  <div class="cta">
+    Run the next cell when you are ready.
+  </div>
 </div>
 """))
