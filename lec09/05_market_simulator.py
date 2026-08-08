@@ -106,23 +106,27 @@ def on_load(_):
     btn_sim.disabled = False
 
 def build_config_ui():
+    global _config_selectors
+    _config_selectors = []
+    
     selectors = []
     for attr, levels in sorted(attr_levels.items()):
         dd = widgets.Dropdown(options=levels, value=levels[0], description=f'{attr}:', 
                               layout=widgets.Layout(width='240px'))
         selectors.append(dd)
+        _config_selectors.append(dd)
+    
+    rows = []
+    for i in range(0, len(selectors), 3):
+        row = widgets.HBox(selectors[i:i+3])
+        rows.append(row)
     
     config_panel.children = [
         widgets.HTML("<h3>Step 2 — Configure Your Product</h3>"),
-        widgets.HTML("<p>Select attribute levels for your product. Reference = worst level.</p>"),
-        widgets.HBox(selectors[:3]) if len(selectors) >= 3 else widgets.HBox(selectors),
-        widgets.HBox(selectors[3:6]) if len(selectors) > 3 else widgets.HTML(""),
-        widgets.HBox(selectors[6:]) if len(selectors) > 6 else widgets.HTML(""),
+        widgets.HTML("<p>Select attribute levels. Reference = worst level.</p>"),
+        widgets.VBox(rows),
         widgets.HBox([btn_sim, sim_status])
     ]
-    
-    # Store selectors for later
-    config_panel._selectors = selectors
 
 def compute_utility(scenario):
     d = np.zeros(len(dummy_cols))
@@ -135,12 +139,12 @@ def compute_utility(scenario):
     return mnl_model.coef_[0].dot(d) + mnl_model.intercept_
 
 def on_sim(_):
-    # Gather current selections
+    # Gather current selections from global
     scenario = {}
-    for sel in config_panel._selectors:
+    for sel in _config_selectors:
         attr = sel.description.replace(':', '')
         scenario[attr] = sel.value
-    
+          
     # Competitor (simple: one generic competitor)
     comp = {
         'Price': comp_price.value,
