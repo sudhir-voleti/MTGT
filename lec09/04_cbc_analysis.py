@@ -282,8 +282,7 @@ def on_lock(_):
     builtins.mnl_agg = mnl_agg
     builtins.dummy_cols = dummy_cols
     builtins.attr_cols = attr_cols
-    
-    render_viz(cbc_dummies, dummy_cols, attr_cols, mnl_agg, choice_col, task_col, resp_col)
+
 
 def render_viz(cbc_dummies, dummy_cols, attr_cols, mnl_agg, choice_col, task_col, resp_col):
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
