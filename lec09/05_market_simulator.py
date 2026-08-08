@@ -71,11 +71,13 @@ def on_load(_):
     raw = list(upload_mnl.value.values())[0]['content']
     coef_df = pd.read_csv(io.BytesIO(raw))
     
-    # Parse coefficients
-    valid = coef_df[coef_df['dummy_name'].apply(lambda x: isinstance(x, str))]
-    dummy_rows = valid[valid['dummy_name'].str.startswith('d_')]
-    intercept_row = valid[valid['dummy_name'].str.lower() == 'intercept']
+    # Ensure dummy_name is string
+    coef_df['dummy_name'] = coef_df['dummy_name'].astype(str)
     
+    # Parse coefficients
+    dummy_rows = coef_df[coef_df['dummy_name'].str.startswith('d_')]
+    intercept_row = coef_df[coef_df['dummy_name'].str.lower() == 'intercept']
+  
     dummy_cols = dummy_rows['dummy_name'].tolist()
     coefs = dummy_rows['coefficient'].values
     intercept = intercept_row['coefficient'].values[0] if len(intercept_row) > 0 else 0
