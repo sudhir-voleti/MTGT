@@ -72,17 +72,23 @@ viz_panel = widgets.VBox([])
 # AUTO-DETECT
 # =============================================================================
 
+inherited_ok = False
 try:
-    mnl_model = globals()['mnl_agg']
-    dummy_cols = globals()['dummy_cols']
-    attr_cols = globals()['attr_cols']
-    if mnl_model is not None and dummy_cols is not None:
+    mnl_model = globals().get('mnl_agg', None)
+    dummy_cols = globals().get('dummy_cols', None)
+    attr_cols = globals().get('attr_cols', None)
+    if mnl_model is not None and dummy_cols is not None and attr_cols is not None:
+        inherited_ok = True
         use_inherited.value = True
         use_inherited.disabled = False
         source_status.value = "✅ Auto-detected MNL from Step 4. Check box and confirm."
-except (KeyError, NameError):
+except Exception as e:
+    pass
+
+if not inherited_ok:
     use_inherited.disabled = True
-    source_status.value = "ℹ️ Upload MNL coefficient CSV."
+    use_inherited.value = False
+    source_status.value = "ℹ️ Upload MNL coefficient CSV from Step 4."
 
 # =============================================================================
 # EVENT HANDLERS
