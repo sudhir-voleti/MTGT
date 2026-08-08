@@ -68,111 +68,99 @@ display(HTML("""
   .caselet-body tr:nth-child(even) td {
     background-color: #f8fafc;
   }
+  .caselet-body .formula {
+    font-size: 1.05em;
+    font-weight: 600;
+    text-align: center;
+    margin: 16px 0;
+    color: #003366;
+    background: #f8fafc;
+    padding: 12px 14px;
+    border-radius: 6px;
+    line-height: 1.5;
+  }
 </style>
 
 <div class="caselet-body">
 
-  <h1>Recap: From Preference to Prescription</h1>
-  <div class="subtitle">What You Have Built</div>
+  <h1>Step 6: GTM Traction Integration — From Share to CLV</h1>
+  <div class="subtitle">The Final Translation</div>
 
-  <p>You began with 400 respondents staring at product profiles on a screen. You end with a recommended SKU, a target segment, a projected market share, and a CLV forecast. Here is the chain of logic you built:</p>
+  <p>You have part-worths. You have market share. Now you must answer the question the board actually cares about: <strong>Is this business worth building?</strong></p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Step</th>
-        <th>What You Did</th>
-        <th>What It Revealed</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><strong>Step 1</strong></td>
-        <td>Uploaded and profiled metric + CBC data</td>
-        <td>Structure, cleanliness, and the "None" option rate</td>
-      </tr>
-      <tr>
-        <td><strong>Step 2</strong></td>
-        <td>Estimated metric conjoint part-worths</td>
-        <td>Attribute importance and individual utility landscapes</td>
-      </tr>
-      <tr>
-        <td><strong>Step 3</strong></td>
-        <td>Estimated CBC logit models</td>
-        <td>Choice validation, WTP, and competitive context</td>
-      </tr>
-      <tr>
-        <td><strong>Step 4</strong></td>
-        <td>Ran market simulations</td>
-        <td>Predicted share for any Yana configuration against rivals</td>
-      </tr>
-      <tr>
-        <td><strong>Step 5</strong></td>
-        <td>Integrated Traction and CLV</td>
-        <td>The beachhead segment and the expected value of serving it</td>
-      </tr>
-    </tbody>
-  </table>
+  <p>A product with 15% share is not automatically good. If the margin is thin and the customer leaves after one year, 15% share is a trap. You need to connect share to lifetime value.</p>
 
-  <h2>The Three Ideas to Take Away</h2>
+  <h2>1. The CLV Formula for Yana</h2>
+  <p>We use a simplified but defensible CLV model:</p>
 
-  <p><strong>First, preference is not choice.</strong></p>
-  <p>Metric conjoint tells you what people like in isolation. CBC tells you what they do when forced to trade. If you launch based on ratings alone, you will overestimate demand for premium features and underestimate price sensitivity.</p>
+  <div class="formula">
+    CLV = (Margin per Unit × Expected Ownership Years × Annual Service Revenue)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;− Customer Acquisition Cost
+  </div>
 
-  <p><strong>Second, the optimal product is not the product with the highest utility.</strong></p>
-  <p>It is the product with the highest utility <em>relative to competitors</em> at a cost structure that leaves margin. A feature with high part-worth is not worth building if it costs more than the WTP it generates.</p>
+  <p>Where:</p>
+  <ul>
+    <li><strong>Margin per Unit</strong> depends on configuration. The 150 km battery pack costs ₹18,000 more than the 75 km pack. Fast charging adds ₹4,000. Basic smart features save ₹6,000 versus Advanced.</li>
+    <li><strong>Expected Ownership Years</strong> is higher when warranty is longer and service network is denser.</li>
+    <li><strong>Annual Service Revenue</strong> is higher for Advanced smart features (OTA subscriptions, app services).</li>
+    <li><strong>Customer Acquisition Cost</strong> is lower when service network is dense (word-of-mouth replaces paid ads).</li>
+  </ul>
 
-  <p><strong>Third, share without CLV is vanity.</strong></p>
-  <p>A configuration that wins 25% share among Price Hunters is a bankruptcy machine if the margin is negative. The beachhead is where Traction and CLV intersect, not where either one is maximized alone.</p>
+  <h2>2. Traction Revisited</h2>
+  <p>Recall V × A × E from Lec07. We now compute it from conjoint utilities:</p>
+  <ul>
+    <li><strong>V</strong> = utility from Range + Smart Features</li>
+    <li><strong>A</strong> = utility from low Price + wide Service + fast Charging</li>
+    <li><strong>E</strong> = utility from Warranty + Brand trust</li>
+  </ul>
 
-  <h2>The Final Synthesis</h2>
-  <p>The CCO asked four questions in the memo. You can now answer them with numbers:</p>
+  <div class="callout">
+    <p>Traction by segment tells you who will adopt. CLV by segment tells you who is worth adopting.</p>
+    <p>The beachhead is where both are high.</p>
+  </div>
+
+  <h2>3. What You Will Do Now</h2>
+  <p>The code cell below opens the GTM Integration Dashboard. You will:</p>
   <ol>
-    <li><strong>Which attributes drive purchase intent?</strong> Your importance scores.</li>
-    <li><strong>Do early adopters and pragmatists want different things?</strong> Your segment-level part-worths.</li>
-    <li><strong>What is the optimal configuration for the pragmatist beachhead?</strong> Your simulated share-maximizing SKU.</li>
-    <li><strong>What is the projected market share and CLV?</strong> Your simulator output.</li>
+    <li>Compute margin and CLV for each simulated configuration.</li>
+    <li>Plot Traction vs. CLV by segment (the "Beachhead Map").</li>
+    <li>Identify the configuration that maximizes expected contribution margin (Share × CLV × Segment Size).</li>
   </ol>
 
   <div class="pause-box">
-    <h3>Pause and Synthesize</h3>
-    <p>Before you close the notebook, write your one-slide board recommendation.</p>
-    <p>One sentence for the product. One sentence for the segment. One number for the share. One number for the CLV.</p>
+    <h3>Pause and Predict</h3>
+    <p>Before you run the cell, mark your prediction on the map. Where do you think each segment sits?</p>
 
     <table>
       <thead>
         <tr>
-          <th>Element</th>
-          <th>My Recommendation</th>
+          <th>Segment</th>
+          <th>My Prediction: High or Low Traction?</th>
+          <th>My Prediction: High or Low CLV?</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>SKU Configuration</td>
+          <td>Tech Enthusiasts</td>
+          <td></td>
           <td></td>
         </tr>
         <tr>
-          <td>Target Segment</td>
+          <td>Pragmatists</td>
+          <td></td>
           <td></td>
         </tr>
         <tr>
-          <td>Projected Year-1 Share</td>
+          <td>Price Hunters</td>
           <td></td>
-        </tr>
-        <tr>
-          <td>Projected CLV per Customer</td>
-          <td></td>
-        </tr>
-        <tr>
-          <td>The Competitor We Hurt Most</td>
           <td></td>
         </tr>
       </tbody>
     </table>
 
-    <p>A good GTM strategy is not a compromise between engineering and finance.</p>
-    <p>It is a specific bet on a specific customer, backed by the arithmetic of their revealed preferences.</p>
-    <p>That is the difference between a launch and a market entry.</p>
+    <p>The segment in the top-right quadrant is your beachhead.</p>
+    <p>If no segment sits there, you have a product-market fit problem, not a pricing problem.</p>
+    <p>Run the next cell when you are ready.</p>
   </div>
 
 </div>
