@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-#  STEP 5: Generic Market Simulator — Share Prediction + Traction + CLV
+#  STEP 5: Market Simulator — Simple Slider-Based Configurator
 # ═══════════════════════════════════════════════════════════════════
 
 import io
@@ -8,331 +8,223 @@ import pandas as pd
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
 from IPython.display import display, clear_output
-from sklearn.linear_model import LogisticRegression
+from google.colab import files
 
 # =============================================================================
 # STATE
 # =============================================================================
 
-mnl_model = None      # from Step 4 or uploaded
-dummy_cols = None     # from Step 4 or uploaded
-attr_cols = None      # from Step 4 or uploaded
-seg_col = None
+mnl_model = None
+dummy_cols = []
+attr_levels = {}  # attr -> [reference, level1, level2, ...]
 
 # =============================================================================
 # WIDGETS
 # =============================================================================
 
-# --- Source panel ---
-use_inherited = widgets.Checkbox(value=False, description='Use Step 4 MNL', disabled=True)
-upload_mnl = widgets.FileUpload(accept='.csv', multiple=False, description='📁 MNL Coefficients', 
+# --- Source ---
+upload_mnl = widgets.FileUpload(accept='.csv', multiple=False, description='📁 MNL Coeffs', 
                                 button_style='primary', layout=widgets.Layout(width='280px'))
-upload_scenarios = widgets.FileUpload(accept='.csv', multiple=False, description='📁 Scenarios (opt)', 
-                                      button_style='info', layout=widgets.Layout(width='280px'))
-
-btn_source = widgets.Button(description='▶ Confirm Source', button_style='success')
-source_status = widgets.HTML("Upload MNL coefficients or check auto-detect.")
+btn_load = widgets.Button(description='▶ Load', button_style='success')
+source_status = widgets.HTML("Upload MNL coefficients CSV from Step 4.")
 
 source_panel = widgets.VBox([
     widgets.HTML("<h2>Market Simulator: Step 1 — Load MNL Model</h2>"),
-    widgets.HTML("<p>Upload coefficient CSV (from Step 4) or auto-detect. Optional: upload scenario definitions.</p>"),
-    widgets.HBox([use_inherited, upload_mnl, upload_scenarios, btn_source]),
+    widgets.HBox([upload_mnl, btn_load]),
     source_status
 ])
 
-# --- Scenario builder panel ---
-scenario_rows = []
+# --- Config panel (populated after load) ---
+config_status = widgets.HTML("<i>Load MNL coefficients first.</i>")
+config_panel = widgets.VBox([])
 
-# Build dynamic attribute selectors from detected columns
-attr_selectors = {}  # populated after source load
-scenario_list = widgets.VBox([])
+# --- Competitor panel ---
+comp_price = widgets.Dropdown(options=['85K', '110K', '140K'], value='95K', description='Comp Price:')
+comp_service = widgets.Dropdown(options=['25cities', '100cities', '300cities'], value='300cities', description='Comp Service:')
+comp_btn = widgets.Button(description='Set Competitors', button_style='info')
 
-btn_add_scenario = widgets.Button(description='➕ Add Scenario', button_style='info', disabled=True)
-btn_simulate = widgets.Button(description='▶ Simulate Market', button_style='success', disabled=True)
-btn_reset = widgets.Button(description='🗑 Reset', button_style='warning')
-
-scenario_status = widgets.HTML("<i>Load MNL model first.</i>")
-
-scenario_panel = widgets.VBox([
-    widgets.HTML("<h3>Step 2 — Build Scenarios</h3>"),
-    widgets.HTML("<p>Define product configurations to simulate. Add competitors and your own SKUs.</p>"),
-    scenario_list,
-    widgets.HBox([btn_add_scenario, btn_simulate, btn_reset]),
-    scenario_status
+comp_panel = widgets.VBox([
+    widgets.HTML("<h4>Competitor Defaults</h4>"),
+    widgets.HBox([comp_price, comp_service]),
+    comp_btn
 ])
 
-scenario_container = widgets.VBox([])
+# --- Simulate ---
+btn_sim = widgets.Button(description='▶ Simulate', button_style='success', disabled=True)
+sim_status = widgets.HTML("")
 
 # --- Results ---
 results_html = widgets.HTML("")
-results_panel = widgets.VBox([results_html])
 viz_panel = widgets.VBox([])
-
-# =============================================================================
-# AUTO-DETECT
-# =============================================================================
-
-inherited_ok = False
-try:
-    mnl_model = globals().get('mnl_agg', None)
-    dummy_cols = globals().get('dummy_cols', None)
-    attr_cols = globals().get('attr_cols', None)
-    if mnl_model is not None and dummy_cols is not None and attr_cols is not None:
-        inherited_ok = True
-        use_inherited.value = True
-        use_inherited.disabled = False
-        source_status.value = "✅ Auto-detected MNL from Step 4. Check box and confirm."
-except Exception as e:
-    pass
-
-if not inherited_ok:
-    use_inherited.disabled = True
-    use_inherited.value = False
-    source_status.value = "ℹ️ Upload MNL coefficient CSV from Step 4."
 
 # =============================================================================
 # EVENT HANDLERS
 # =============================================================================
 
-def on_source(_):
-    global mnl_model, dummy_cols, attr_cols, seg_col
+def on_load(_):
+    global mnl_model, dummy_cols, attr_levels
     
-    if use_inherited.value:
-        try:
-            mnl_model = globals()['mnl_agg']
-            dummy_cols = globals()['dummy_cols']
-            attr_cols = globals()['attr_cols']
-            source_status.value = f"✅ Using Step 4 MNL: {len(dummy_cols)} dummies, {len(attr_cols)} attributes"
-        except (KeyError, NameError):
-            source_status.value = "<span style='color:#c53030'>❌ Step 4 results not found. Upload CSV.</span>"
-            return
-    else:
-        if not upload_mnl.value:
-            source_status.value = "<span style='color:#c53030'>❌ Upload MNL CSV or check auto-detect</span>"
-            return
-        raw = list(upload_mnl.value.values())[0]['content']
-        coef_df = pd.read_csv(io.BytesIO(raw))
-        
-        # Filter valid dummy names (strings starting with d_)
-        valid_rows = coef_df[coef_df['dummy_name'].apply(lambda x: isinstance(x, str) and x.startswith('d_'))]
-        dummy_cols = valid_rows['dummy_name'].tolist()
-        coefs = valid_rows['coefficient'].values
-        
-        # Handle intercept separately if present
-        intercept_row = coef_df[coef_df['dummy_name'].apply(lambda x: isinstance(x, str) and x.lower() == 'intercept')]
-        intercept_val = intercept_row['coefficient'].values[0] if len(intercept_row) > 0 else 0
-        
-        # Reconstruct simple model
-        class SimpleModel:
-            def __init__(self, c, inter):
-                self.coef_ = np.array([c])
-                self.intercept_ = inter
-        mnl_model = SimpleModel(coefs, intercept_val)
-        
-        # Extract attribute names from dummy names
-        attr_cols = []
-        for d in dummy_cols:
-            parts = d[2:].split('_')  # Remove 'd_' prefix
-            if len(parts) >= 2:
-                attr_cols.append(parts[0])
-        attr_cols = list(dict.fromkeys(attr_cols))  # Deduplicate, preserve order
-        
-        source_status.value = f"✅ Uploaded MNL: {len(dummy_cols)} dummies, {len(attr_cols)} attributes, intercept={intercept_val:.3f}"
-          
-    # Build scenario UI
-    build_scenario_ui()
+    if not upload_mnl.value:
+        source_status.value = "<span style='color:#c53030'>❌ Upload CSV first.</span>"
+        return
     
-    btn_add_scenario.disabled = False
-    btn_simulate.disabled = False
-    scenario_container.children = [scenario_panel]
-
-def build_scenario_ui():
-    global attr_selectors
+    raw = list(upload_mnl.value.values())[0]['content']
+    coef_df = pd.read_csv(io.BytesIO(raw))
     
-    # Parse dummy names to get attribute levels
+    # Parse coefficients
+    valid = coef_df[coef_df['dummy_name'].apply(lambda x: isinstance(x, str))]
+    dummy_rows = valid[valid['dummy_name'].str.startswith('d_')]
+    intercept_row = valid[valid['dummy_name'].str.lower() == 'intercept']
+    
+    dummy_cols = dummy_rows['dummy_name'].tolist()
+    coefs = dummy_rows['coefficient'].values
+    intercept = intercept_row['coefficient'].values[0] if len(intercept_row) > 0 else 0
+    
+    # Build simple model
+    class SimpleModel:
+        def __init__(self, c, inter):
+            self.coef_ = np.array([c])
+            self.intercept_ = inter
+    mnl_model = SimpleModel(coefs, intercept)
+    
+    # Extract attribute levels from dummy names
     attr_levels = {}
     for d in dummy_cols:
-        if not d.startswith('d_'):
-            continue
         parts = d[2:].split('_')
-        if len(parts) >= 2:
-            attr = parts[0]
-            level = '_'.join(parts[1:])
-            if attr not in attr_levels:
-                attr_levels[attr] = ['(reference)']
-            attr_levels[attr].append(level)
+        attr = parts[0]
+        level = '_'.join(parts[1:])
+        if attr not in attr_levels:
+            attr_levels[attr] = ['(reference)']
+        attr_levels[attr].append(level)
     
-    # Create dropdowns for each attribute
-    attr_selectors = {}
-    for attr in attr_cols:
-        levels = attr_levels.get(attr, ['(reference)', 'level1', 'level2'])
+    source_status.value = f"✅ Loaded: {len(dummy_cols)} dummies, {len(attr_levels)} attributes, intercept={intercept:.3f}"
+    
+    # Build config UI
+    build_config_ui()
+    btn_sim.disabled = False
+
+def build_config_ui():
+    selectors = []
+    for attr, levels in sorted(attr_levels.items()):
         dd = widgets.Dropdown(options=levels, value=levels[0], description=f'{attr}:', 
-                              layout=widgets.Layout(width='220px'))
-        attr_selectors[attr] = dd
+                              layout=widgets.Layout(width='240px'))
+        selectors.append(dd)
+    
+    config_panel.children = [
+        widgets.HTML("<h3>Step 2 — Configure Your Product</h3>"),
+        widgets.HTML("<p>Select attribute levels for your product. Reference = worst level.</p>"),
+        widgets.HBox(selectors[:3]) if len(selectors) >= 3 else widgets.HBox(selectors),
+        widgets.HBox(selectors[3:6]) if len(selectors) > 3 else widgets.HTML(""),
+        widgets.HBox(selectors[6:]) if len(selectors) > 6 else widgets.HTML(""),
+        widgets.HBox([btn_sim, sim_status])
+    ]
+    
+    # Store selectors for later
+    config_panel._selectors = selectors
 
-def add_scenario_row(_):
-    if not attr_selectors:
-        return
-    
-    txt_name = widgets.Text(value=f"Scenario {len(scenario_rows)+1}", description='Name:', 
-                            layout=widgets.Layout(width='200px'))
-    selectors = widgets.HBox([attr_selectors[a] for a in attr_cols[:min(4, len(attr_cols))]])
-    
-    row = widgets.VBox([widgets.HBox([txt_name, selectors])])
-    scenario_rows.append({'name': txt_name, 'selectors': {a: attr_selectors[a] for a in attr_cols}})
-    scenario_list.children = [r['name'].parent for r in scenario_rows]  # Simplified
+def compute_utility(scenario):
+    d = np.zeros(len(dummy_cols))
+    for i, dummy in enumerate(dummy_cols):
+        parts = dummy[2:].split('_')
+        attr = parts[0]
+        level = '_'.join(parts[1:])
+        if attr in scenario and scenario[attr] == level:
+            d[i] = 1
+    return mnl_model.coef_[0].dot(d) + mnl_model.intercept_
 
-# Simpler: just use the current selector values
-def on_simulate(_):
-    global seg_col
-    
-    if mnl_model is None:
-        scenario_status.value = "<span style='color:#c53030'>❌ Load MNL model first.</span>"
-        return
-    
-    # Build scenario from current selector values
+def on_sim(_):
+    # Gather current selections
     scenario = {}
-    for attr, selector in attr_selectors.items():
-        scenario[attr] = selector.value
+    for sel in config_panel._selectors:
+        attr = sel.description.replace(':', '')
+        scenario[attr] = sel.value
     
-    # Compute utility
-    def scenario_to_dummies(scenario):
-        d = np.zeros(len(dummy_cols))
-        for i, dummy in enumerate(dummy_cols):
-            if not dummy.startswith('d_'):
-                continue
-            parts = dummy[2:].split('_')
-            attr = parts[0]
-            level = '_'.join(parts[1:])
-            if attr in scenario and scenario[attr] == level:
-                d[i] = 1
-        return d
-    
-    # Simulate against competitors
-    lines = []
-    lines.append("="*60)
-    lines.append("MARKET SIMULATION")
-    lines.append("="*60)
-    
-    # Your product
-    your_dummies = scenario_to_dummies(scenario)
-    your_u = mnl_model.coef_[0].dot(your_dummies) + getattr(mnl_model, 'intercept_', 0)
-    
-    lines.append(f"\nYour Product: {scenario}")
-    lines.append(f"Utility: {your_u:.3f}")
-    
-    # Competitor defaults (can be overridden)
-    competitors = {
-        'Competitor A': {a: '(reference)' for a in attr_cols},
-        'Competitor B': {a: '(reference)' for a in attr_cols},
-        'None': {a: '(reference)' for a in attr_cols}
+    # Competitor (simple: one generic competitor)
+    comp = {
+        'Price': comp_price.value,
+        'Service': comp_service.value
     }
+    # Fill other attrs with reference
+    for attr in attr_levels:
+        if attr not in comp:
+            comp[attr] = '(reference)'
     
-    # Override with some realistic competitors if attributes match
-    for comp in competitors:
-        comp_dummies = scenario_to_dummies(competitors[comp])
-        comp_u = mnl_model.coef_[0].dot(comp_dummies)
-        competitors[comp]['_utility'] = comp_u
+    # Compute utilities
+    your_u = compute_utility(scenario)
+    comp_u = compute_utility(comp)
+    none_u = 0  # reference
     
-    # Logit probabilities
-    all_utils = [your_u] + [c['_utility'] for c in competitors.values()]
-    exp_u = np.exp(np.array(all_utils) - max(all_utils))
+    # Logit
+    utils = [your_u, comp_u, none_u]
+    exp_u = np.exp(np.array(utils) - max(utils))
     probs = exp_u / exp_u.sum()
     
-    lines.append(f"\nPredicted Market Shares:")
-    lines.append(f"  Your Product:    {probs[0]:.1%}")
-    for i, (name, comp) in enumerate(competitors.items(), 1):
-        lines.append(f"  {name:15s}: {probs[i]:.1%}")
+    # Traction
+    v_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['range', 'smart', 'feature'])]
+    a_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['price', 'service', 'charge'])]
+    e_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['warranty', 'trust'])]
     
-    # Traction computation
-    lines.append("\n" + "="*60)
-    lines.append("TRACTION = V × A × E")
-    lines.append("="*60)
-    
-    # Auto-detect pillar mapping
-    v_attrs = [a for a in attr_cols if any(k in a.lower() for k in ['range', 'smart', 'feature', 'performance'])]
-    a_attrs = [a for a in attr_cols if any(k in a.lower() for k in ['price', 'service', 'charge', 'access'])]
-    e_attrs = [a for a in attr_cols if any(k in a.lower() for k in ['warranty', 'trust', 'brand', 'evidence'])]
-    
-    def pillar_score(scenario, attrs):
+    def pillar_score(scen, attrs):
         if not attrs:
             return 0.5
-        score = 0
-        for attr in attrs:
-            val = scenario.get(attr, '(reference)')
-            # Find dummy for this level
-            dummy_name = f"d_{attr}_{val}" if val != '(reference)' else None
-            if dummy_name and dummy_name in dummy_cols:
-                idx = dummy_cols.index(dummy_name)
-                score += mnl_model.coef_[0][idx]
-        return 1 / (1 + np.exp(-score))  # sigmoid to 0-1
+        score = sum([mnl_model.coef_[0][dummy_cols.index(f"d_{a}_{scen[a]}")] 
+                     for a in attrs if f"d_{a}_{scen[a]}" in dummy_cols])
+        return 1 / (1 + np.exp(-score))
     
     V = pillar_score(scenario, v_attrs)
     A = pillar_score(scenario, a_attrs)
     E = pillar_score(scenario, e_attrs)
     traction = V * A * E
     
-    lines.append(f"  V (Value)     : {V:.3f}  [{', '.join(v_attrs) or 'none'}]")
-    lines.append(f"  A (Access)    : {A:.3f}  [{', '.join(a_attrs) or 'none'}]")
-    lines.append(f"  E (Evidence)  : {E:.3f}  [{', '.join(e_attrs) or 'none'}]")
-    lines.append(f"  Traction      : {traction:.3f}")
-    
     # CLV
-    lines.append("\n" + "="*60)
-    lines.append("CLV PROJECTION")
-    lines.append("="*60)
-    
-    market_size = 100000  # default TAM
-    margin = 15000
-    cac = 5000
-    years = 5
-    
     share = probs[0]
-    clv = share * market_size * margin * years - cac
+    clv = share * 100000 * 15000 * 5 - 5000
     
-    lines.append(f"  Market Size   : {market_size:,}")
-    lines.append(f"  Your Share    : {share:.1%}")
-    lines.append(f"  Margin/Unit   : ₹{margin:,}")
-    lines.append(f"  CAC           : ₹{cac:,}")
-    lines.append(f"  Ownership     : {years} years")
-    lines.append(f"  CLV           : ₹{clv:,.0f}")
+    # Display
+    lines = []
+    lines.append("="*60)
+    lines.append("MARKET SIMULATION RESULTS")
+    lines.append("="*60)
+    lines.append(f"\nYour Product: {scenario}")
+    lines.append(f"Competitor:   {comp}")
+    lines.append(f"\nPredicted Shares:")
+    lines.append(f"  Your Product:  {probs[0]:.1%}")
+    lines.append(f"  Competitor:    {probs[1]:.1%}")
+    lines.append(f"  None:          {probs[2]:.1%}")
+    lines.append(f"\nTraction = V × A × E:")
+    lines.append(f"  V (Value):     {V:.3f}")
+    lines.append(f"  A (Access):    {A:.3f}")
+    lines.append(f"  E (Evidence):  {E:.3f}")
+    lines.append(f"  Traction:      {traction:.3f}")
+    lines.append(f"\nCLV Projection:")
+    lines.append(f"  Market Share:  {share:.1%}")
+    lines.append(f"  CLV:           ₹{clv:,.0f}")
     
-    lines.append("\n✅ Simulation complete.")
-    results_html.value = "<pre style='font-family:monospace; font-size:13px; line-height:1.5;'>" + "\n".join(lines) + "</pre>"
+    results_html.value = "<pre style='font-family:monospace; font-size:13px;'>" + "\n".join(lines) + "</pre>"
     
-    render_viz(scenario, probs, V, A, E, traction, competitors)
-
-def on_reset(_):
-    scenario_status.value = "<i>Load MNL model first.</i>"
-    results_html.value = ""
-    viz_panel.children = []
-
-def render_viz(scenario, probs, V, A, E, traction, competitors):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    # Viz
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     
-    # Plot 1: Market share pie/bar
     ax = axes[0]
-    names = ['Your Product'] + list(competitors.keys())
-    values = list(probs)
-    colors = ['#2c7a7b'] + ['#718096', '#d69e2e', '#e53e3e']
-    ax.barh(names[::-1], values[::-1], color=colors[:len(names)][::-1], edgecolor='black')
-    ax.set_xlabel('Predicted Choice Probability')
-    ax.set_title('Market Share Simulation')
-    for i, v in enumerate(values[::-1]):
-        ax.text(v + 0.01, i, f'{v:.1%}', va='center', fontsize=10)
+    names = ['Your Product', 'Competitor', 'None']
+    vals = probs
+    colors = ['#2c7a7b', '#718096', '#e53e3e']
+    ax.barh(names, vals, color=colors, edgecolor='black')
+    ax.set_xlabel('Choice Probability')
+    ax.set_title('Predicted Market Shares')
+    for i, v in enumerate(vals):
+        ax.text(v + 0.01, i, f'{v:.1%}', va='center')
     
-    # Plot 2: Traction pillars
     ax = axes[1]
     pillars = ['V\n(Value)', 'A\n(Access)', 'E\n(Evidence)']
     pvals = [V, A, E]
     pcolors = ['#2c7a7b', '#d69e2e', '#e53e3e']
     bars = ax.bar(pillars, pvals, color=pcolors, edgecolor='black')
-    ax.set_ylabel('Score (0-1)')
+    ax.set_ylabel('Score')
     ax.set_title(f'Traction = {traction:.3f}')
     ax.set_ylim(0, 1.05)
     for bar, val in zip(bars, pvals):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02, 
-               f'{val:.2f}', ha='center', fontsize=11, fontweight='bold')
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02, f'{val:.2f}', ha='center')
     
     plt.tight_layout()
     plt.show()
@@ -341,28 +233,27 @@ def render_viz(scenario, probs, V, A, E, traction, competitors):
     <div style="background:#fffbeb; border:2px dashed #f59e0b; border-radius:12px; padding:16px; margin:12px 0;">
     <h4 style="margin-top:0; color:#b45309;">Discussion Questions</h4>
     <ol style="color:#78350f;">
-    <li><b>Share:</b> Is your predicted share above 20%? If not, which competitor are you losing to?</li>
-    <li><b>Traction:</b> Which pillar is lowest? Is it V, A, or E? That is your strategic bottleneck.</li>
-    <li><b>Tradeoff:</b> What happens to share if you cut price by 25K but keep everything else?</li>
-    <li><b>CLV:</b> Does the configuration with highest share also have highest CLV? If not, why?</li>
+    <li><b>Share:</b> Is your share above 25%? If not, which attribute is killing you?</li>
+    <li><b>Traction:</b> Which pillar is lowest? That is your bottleneck.</li>
+    <li><b>Tradeoff:</b> Change one slider. What happens to share and traction?</li>
+    <li><b>CLV:</b> Does highest share = highest CLV? When does it not?</li>
     </ol>
     </div>
     """
     viz_panel.children = [widgets.HTML(questions)]
 
 # =============================================================================
-# WIRE & ASSEMBLE
+# WIRE
 # =============================================================================
 
-btn_source.on_click(on_source)
-btn_add_scenario.on_click(add_scenario_row)
-btn_simulate.on_click(on_simulate)
-btn_reset.on_click(on_reset)
+btn_load.on_click(on_load)
+btn_sim.on_click(on_sim)
 
 full_ui = widgets.VBox([
     source_panel,
-    scenario_container,
-    results_panel,
+    config_panel,
+    comp_panel,
+    results_html,
     viz_panel
 ])
 
