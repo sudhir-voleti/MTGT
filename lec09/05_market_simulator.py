@@ -103,7 +103,9 @@ def on_load(_):
     
     # Build config UI
     build_config_ui()
-    btn_sim.disabled = False
+    # Force button state update
+    btn_sim.disabled = True
+    btn_sim.disabled = False  
 
 def build_config_ui():
     global _config_selectors
