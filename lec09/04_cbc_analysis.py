@@ -154,21 +154,53 @@ def on_source(_):
     mapping_panel.children = [mapping_controls]
 
 def make_dummies(df_in, cols):
-    """Create dummy variables for selected categorical columns."""
+    """Create dummy variables with intuitive reference levels (worst = reference)."""
     out = df_in.copy()
     dummy_cols = []
+    
+    # Domain-knowledge mapping: which level is "worst" for each attribute type
+    worst_level_hints = {
+        'price': ['140K', '140k', 'high', 'expensive', 'premium', 'max'],
+        'cost': ['140K', '140k', 'high', 'expensive', 'premium', 'max'],
+        'range': ['75km', '75', 'low', 'short', 'min', '50km', '60km'],
+        'service': ['25cities', '25', 'low', 'min', 'none', 'poor', 'basic'],
+        'smart': ['basic', 'none', 'low', 'min', 'standard'],
+        'warranty': ['2yr', '2', 'low', 'min', 'none', 'short'],
+        'charge': ['4hrs', '4', 'slow', 'long', 'standard', 'min'],
+    }
     
     for col in cols:
         unique_vals = sorted(df_in[col].dropna().unique())
         if len(unique_vals) < 2:
             continue
         
-        ref = unique_vals[0]
-        for val in unique_vals[1:]:
+        # Determine reference level: try to pick the "worst" one
+        ref = unique_vals[0]  # default: first sorted
+        col_lower = col.lower()
+        
+        # Check if this column matches any known attribute type
+        for hint_key, hint_vals in worst_level_hints.items():
+            if hint_key in col_lower:
+                # Find the first matching "worst" level in the actual data
+                for hv in hint_vals:
+                    for uv in unique_vals:
+                        if str(uv).lower() == hv.lower() or hv.lower() in str(uv).lower():
+                            ref = uv
+                            break
+                    if ref != unique_vals[0]:
+                        break
+                break
+        
+        # Create dummies for all non-reference levels
+        for val in unique_vals:
+            if val == ref:
+                continue
             safe_val = str(val).replace(' ', '_').replace('.', '_')
             dummy_name = f"d_{col}_{safe_val}"
             out[dummy_name] = (df_in[col] == val).astype(int)
             dummy_cols.append(dummy_name)
+        
+        print(f"  {col}: reference = '{ref}' (worst), dummies = {len(unique_vals)-1}")
     
     return out, dummy_cols
 
@@ -282,7 +314,8 @@ def on_lock(_):
     builtins.mnl_agg = mnl_agg
     builtins.dummy_cols = dummy_cols
     builtins.attr_cols = attr_cols
-
+    
+    #render_viz(cbc_dummies, dummy_cols, attr_cols, mnl_agg, choice_col, task_col, resp_col)
 
 def render_viz(cbc_dummies, dummy_cols, attr_cols, mnl_agg, choice_col, task_col, resp_col):
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
