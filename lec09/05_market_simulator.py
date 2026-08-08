@@ -129,125 +129,141 @@ def build_config_ui():
     ]
 
 def compute_utility(scenario):
+    """Compute utility for a given attribute configuration."""
     d = np.zeros(len(dummy_cols))
     for i, dummy in enumerate(dummy_cols):
         parts = dummy[2:].split('_')
         attr = parts[0]
         level = '_'.join(parts[1:])
-        if attr in scenario and scenario[attr] == level:
+        if scenario.get(attr) == level:
             d[i] = 1
     return mnl_model.coef_[0].dot(d) + mnl_model.intercept_
 
-def on_sim(_):
-    # Gather current selections from global
-    scenario = {}
-    for sel in _config_selectors:
-        attr = sel.description.replace(':', '')
-        scenario[attr] = sel.value
-          
-    # Competitor (simple: one generic competitor)
-    comp = {
-        'Price': comp_price.value,
-        'Service': comp_service.value
-    }
-    # Fill other attrs with reference
-    for attr in attr_levels:
-        if attr not in comp:
-            comp[attr] = '(reference)'
-    
-    # Compute utilities
-    your_u = compute_utility(scenario)
-    comp_u = compute_utility(comp)
-    none_u = 0  # reference
-    
-    # Logit
-    utils = [your_u, comp_u, none_u]
-    exp_u = np.exp(np.array(utils) - max(utils))
-    probs = exp_u / exp_u.sum()
-    
-    # Traction
-    v_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['range', 'smart', 'feature'])]
-    a_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['price', 'service', 'charge'])]
-    e_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['warranty', 'trust'])]
-    
-    def pillar_score(scen, attrs):
-        if not attrs:
-            return 0.5
-        score = sum([mnl_model.coef_[0][dummy_cols.index(f"d_{a}_{scen[a]}")] 
-                     for a in attrs if f"d_{a}_{scen[a]}" in dummy_cols])
-        return 1 / (1 + np.exp(-score))
-    
-    V = pillar_score(scenario, v_attrs)
-    A = pillar_score(scenario, a_attrs)
-    E = pillar_score(scenario, e_attrs)
-    traction = V * A * E
-    
-    # CLV
-    share = probs[0]
-    clv = share * 100000 * 15000 * 5 - 5000
-    
-    # Display
-    lines = []
-    lines.append("="*60)
-    lines.append("MARKET SIMULATION RESULTS")
-    lines.append("="*60)
-    lines.append(f"\nYour Product: {scenario}")
-    lines.append(f"Competitor:   {comp}")
-    lines.append(f"\nPredicted Shares:")
-    lines.append(f"  Your Product:  {probs[0]:.1%}")
-    lines.append(f"  Competitor:    {probs[1]:.1%}")
-    lines.append(f"  None:          {probs[2]:.1%}")
-    lines.append(f"\nTraction = V × A × E:")
-    lines.append(f"  V (Value):     {V:.3f}")
-    lines.append(f"  A (Access):    {A:.3f}")
-    lines.append(f"  E (Evidence):  {E:.3f}")
-    lines.append(f"  Traction:      {traction:.3f}")
-    lines.append(f"\nCLV Projection:")
-    lines.append(f"  Market Share:  {share:.1%}")
-    lines.append(f"  CLV:           ₹{clv:,.0f}")
-    
-    results_html.value = "<pre style='font-family:monospace; font-size:13px;'>" + "\n".join(lines) + "</pre>"
-    
-    # Viz
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    
-    ax = axes[0]
-    names = ['Your Product', 'Competitor', 'None']
-    vals = probs
-    colors = ['#2c7a7b', '#718096', '#e53e3e']
-    ax.barh(names, vals, color=colors, edgecolor='black')
-    ax.set_xlabel('Choice Probability')
-    ax.set_title('Predicted Market Shares')
-    for i, v in enumerate(vals):
-        ax.text(v + 0.01, i, f'{v:.1%}', va='center')
-    
-    ax = axes[1]
-    pillars = ['V\n(Value)', 'A\n(Access)', 'E\n(Evidence)']
-    pvals = [V, A, E]
-    pcolors = ['#2c7a7b', '#d69e2e', '#e53e3e']
-    bars = ax.bar(pillars, pvals, color=pcolors, edgecolor='black')
-    ax.set_ylabel('Score')
-    ax.set_title(f'Traction = {traction:.3f}')
-    ax.set_ylim(0, 1.05)
-    for bar, val in zip(bars, pvals):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02, f'{val:.2f}', ha='center')
-    
-    plt.tight_layout()
-    plt.show()
-    
-    questions = """
-    <div style="background:#fffbeb; border:2px dashed #f59e0b; border-radius:12px; padding:16px; margin:12px 0;">
-    <h4 style="margin-top:0; color:#b45309;">Discussion Questions</h4>
-    <ol style="color:#78350f;">
-    <li><b>Share:</b> Is your share above 25%? If not, which attribute is killing you?</li>
-    <li><b>Traction:</b> Which pillar is lowest? That is your bottleneck.</li>
-    <li><b>Tradeoff:</b> Change one slider. What happens to share and traction?</li>
-    <li><b>CLV:</b> Does highest share = highest CLV? When does it not?</li>
-    </ol>
-    </div>
-    """
-    viz_panel.children = [widgets.HTML(questions)]
+def pillar_score(scenario, attrs):
+    """Compute pillar score (sigmoid of sum of part-worths)."""
+    if not attrs:
+        return 0.5
+    score = 0
+    for attr in attrs:
+        val = scenario.get(attr, '(reference)')
+        dummy_name = f"d_{attr}_{val}"
+        if dummy_name in dummy_cols:
+            idx = dummy_cols.index(dummy_name)
+            score += mnl_model.coef_[0][idx]
+    return 1 / (1 + np.exp(-score))
 
+def on_sim(_):
+    with out:
+        clear_output()
+        
+        # Read your product config
+        your_config = {}
+        for attr, dd in _config_selectors.items():
+            your_config[attr] = dd.value
+        
+        # Competitor config (hardcoded realistic default, editable later if needed)
+        competitor_config = {
+            'Range': '110km',
+            'Charge': '1.5hrs', 
+            'Price': '95K',
+            'Service': '300cities',
+            'Smart': 'Advanced',
+            'Warranty': '3yr'
+        }
+        # Fill missing attrs with reference
+        for attr in attr_levels:
+            if attr not in competitor_config:
+                competitor_config[attr] = '(reference)'
+        
+        # Compute utilities
+        your_u = compute_utility(your_config)
+        comp_u = compute_utility(competitor_config)
+        none_u = 0.0  # outside good
+        
+        # Logit choice probabilities
+        utils = [your_u, comp_u, none_u]
+        exp_u = np.exp(np.array(utils) - max(utils))
+        probs = exp_u / exp_u.sum()
+        
+        print("="*60)
+        print("MARKET SIMULATION")
+        print("="*60)
+        
+        print(f"\nYour Product:")
+        for attr, val in sorted(your_config.items()):
+            print(f"  {attr:15s}: {val}")
+        print(f"  Utility: {your_u:.3f}")
+        
+        print(f"\nCompetitor:")
+        for attr, val in sorted(competitor_config.items()):
+            print(f"  {attr:15s}: {val}")
+        print(f"  Utility: {comp_u:.3f}")
+        
+        print(f"\nPredicted Choice Probabilities:")
+        print(f"  Your Product:  {probs[0]:.1%}")
+        print(f"  Competitor:    {probs[1]:.1%}")
+        print(f"  None:          {probs[2]:.1%}")
+        
+        # Traction
+        print(f"\n{'='*60}")
+        print("TRACTION = V × A × E")
+        print("="*60)
+        
+        v_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['range', 'smart', 'feature'])]
+        a_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['price', 'service', 'charge'])]
+        e_attrs = [a for a in attr_levels if any(k in a.lower() for k in ['warranty', 'trust'])]
+        
+        V = pillar_score(your_config, v_attrs)
+        A = pillar_score(your_config, a_attrs)
+        E = pillar_score(your_config, e_attrs)
+        traction = V * A * E
+        
+        print(f"  V (Value):     {V:.3f}")
+        print(f"  A (Access):    {A:.3f}")
+        print(f"  E (Evidence):  {E:.3f}")
+        print(f"  Traction:      {traction:.3f}")
+        
+        # CLV
+        share = probs[0]
+        clv = share * 100000 * 15000 * 5 - 5000
+        print(f"\n{'='*60}")
+        print("CLV PROJECTION")
+        print("="*60)
+        print(f"  Market Share:  {share:.1%}")
+        print(f"  CLV:           ₹{clv:,.0f}")
+        
+        # Plot
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+        
+        # Share bars
+        ax = axes[0]
+        names = ['Your Product', 'Competitor', 'None']
+        vals = probs
+        colors = ['#2c7a7b', '#718096', '#e53e3e']
+        bars = ax.barh(names, vals, color=colors, edgecolor='black')
+        ax.set_xlabel('Choice Probability')
+        ax.set_title('Predicted Market Shares')
+        ax.set_xlim(0, 1)
+        for i, (bar, v) in enumerate(zip(bars, vals)):
+            ax.text(v + 0.02, bar.get_y() + bar.get_height()/2, f'{v:.1%}', 
+                   va='center', fontsize=11, fontweight='bold')
+        
+        # Traction pillars
+        ax = axes[1]
+        pillars = ['V\n(Value)', 'A\n(Access)', 'E\n(Evidence)']
+        pvals = [V, A, E]
+        pcolors = ['#2c7a7b', '#d69e2e', '#e53e3e']
+        bars = ax.bar(pillars, pvals, color=pcolors, edgecolor='black')
+        ax.set_ylabel('Score (0-1)')
+        ax.set_title(f'Traction = {traction:.3f}')
+        ax.set_ylim(0, 1.05)
+        for bar, val in zip(bars, pvals):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02, 
+                   f'{val:.2f}', ha='center', fontsize=11, fontweight='bold')
+        
+        plt.tight_layout()
+        plt.show()
+      
 # =============================================================================
 # WIRE
 # =============================================================================
