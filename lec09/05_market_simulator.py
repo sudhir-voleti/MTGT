@@ -112,18 +112,33 @@ def on_source(_):
             return
         raw = list(upload_mnl.value.values())[0]['content']
         coef_df = pd.read_csv(io.BytesIO(raw))
-        # Expect columns: dummy_name, coefficient
-        dummy_cols = coef_df['dummy_name'].tolist()
-        coefs = coef_df['coefficient'].values
+        
+        # Filter valid dummy names (strings starting with d_)
+        valid_rows = coef_df[coef_df['dummy_name'].apply(lambda x: isinstance(x, str) and x.startswith('d_'))]
+        dummy_cols = valid_rows['dummy_name'].tolist()
+        coefs = valid_rows['coefficient'].values
+        
+        # Handle intercept separately if present
+        intercept_row = coef_df[coef_df['dummy_name'].apply(lambda x: isinstance(x, str) and x.lower() == 'intercept')]
+        intercept_val = intercept_row['coefficient'].values[0] if len(intercept_row) > 0 else 0
+        
         # Reconstruct simple model
         class SimpleModel:
-            def __init__(self, c):
+            def __init__(self, c, inter):
                 self.coef_ = np.array([c])
-                self.intercept_ = 0
-        mnl_model = SimpleModel(coefs)
-        attr_cols = list(set([d.split('_')[1] for d in dummy_cols if d.startswith('d_')]))
-        source_status.value = f"✅ Uploaded MNL: {len(dummy_cols)} dummies"
-    
+                self.intercept_ = inter
+        mnl_model = SimpleModel(coefs, intercept_val)
+        
+        # Extract attribute names from dummy names
+        attr_cols = []
+        for d in dummy_cols:
+            parts = d[2:].split('_')  # Remove 'd_' prefix
+            if len(parts) >= 2:
+                attr_cols.append(parts[0])
+        attr_cols = list(dict.fromkeys(attr_cols))  # Deduplicate, preserve order
+        
+        source_status.value = f"✅ Uploaded MNL: {len(dummy_cols)} dummies, {len(attr_cols)} attributes, intercept={intercept_val:.3f}"
+          
     # Build scenario UI
     build_scenario_ui()
     
