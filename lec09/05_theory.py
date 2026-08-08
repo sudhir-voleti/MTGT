@@ -68,97 +68,59 @@ display(HTML("""
   .caselet-body tr:nth-child(even) td {
     background-color: #f8fafc;
   }
-  .caselet-body .formula {
-    font-size: 1.05em;
-    font-weight: 600;
-    text-align: center;
-    margin: 16px 0;
-    color: #003366;
-    background: #f8fafc;
-    padding: 12px 14px;
-    border-radius: 6px;
-    line-height: 1.5;
-  }
 </style>
 
 <div class="caselet-body">
 
-  <h1>Step 5: GTM Traction Integration — From Share to CLV</h1>
-  <div class="subtitle">The Final Translation</div>
+  <h1>Step 5: Market Simulator — Who Wins When Everyone Is in the Room?</h1>
+  <div class="subtitle">From Utilities to Market Shares</div>
 
-  <p>You have part-worths. You have market share. Now you must answer the question the board actually cares about: <strong>Is this business worth building?</strong></p>
+  <p>You now know what individuals value. The next question is what happens when everyone shows up at the same time.</p>
 
-  <p>A product with 15% share is not automatically good. If the margin is thin and the customer leaves after one year, 15% share is a trap. You need to connect share to lifetime value.</p>
+  <p>A market simulator takes the MNL model from Step 4 and drops it into a competitive scenario. You define the attributes of every competitor. The model predicts the probability that each customer type chooses each product. Sum those probabilities across segments, weighted by segment size, and you have a market share forecast.</p>
 
-  <h2>1. The CLV Formula for Yana</h2>
-  <p>We use a simplified but defensible CLV model:</p>
+  <h2>1. The Simulation Logic</h2>
+  <p>For any product configuration, compute its utility U. Then compute choice probability against the competitive set. Repeat for every segment. Weight by segment prevalence.</p>
+  <p>The formula is the same logit ratio, but now you are running it retrospectively for products that do not yet exist. That is the power of conjoint: it lets you test configurations before you tool the factory.</p>
 
-  <div class="formula">
-    CLV = (Margin per Unit × Expected Ownership Years × Annual Service Revenue) − Customer Acquisition Cost
-  </div>
-
-  <p>Where:</p>
-  <ul>
-    <li><strong>Margin per Unit</strong> depends on configuration. The 150 km battery pack costs ₹18,000 more than the 75 km pack. Fast charging adds ₹4,000. Basic smart features save ₹6,000 versus Advanced.</li>
-    <li><strong>Expected Ownership Years</strong> is higher when warranty is longer and service network is denser.</li>
-    <li><strong>Annual Service Revenue</strong> is higher for Advanced smart features (OTA subscriptions, app services).</li>
-    <li><strong>Customer Acquisition Cost</strong> is lower when service network is dense (word-of-mouth replaces paid ads).</li>
-  </ul>
-
-  <h2>2. Traction Revisited</h2>
-  <p>Recall V × A × E from Lec07. We now compute it from conjoint utilities:</p>
-  <ul>
-    <li><strong>V</strong> = utility from Range + Smart Features</li>
-    <li><strong>A</strong> = utility from low Price + wide Service + fast Charging</li>
-    <li><strong>E</strong> = utility from Warranty + Brand trust</li>
-  </ul>
-
-  <div class="callout">
-    <p>Traction by segment tells you who will adopt. CLV by segment tells you who is worth adopting.</p>
-    <p>The beachhead is where both are high.</p>
-  </div>
-
-  <h2>3. What You Will Do Now</h2>
-  <p>The code cell below will:</p>
+  <h2>2. What You Will Do Now</h2>
+  <p>The code cell below opens the Market Simulator. You will:</p>
   <ol>
-    <li>Compute margin and CLV for each simulated configuration.</li>
-    <li>Plot Traction vs. CLV by segment (the "Beachhead Map").</li>
-    <li>Identify the configuration that maximizes expected contribution margin (Share × CLV × Segment Size).</li>
+    <li>Set the competitive baseline (Honda, Ola, Ather).</li>
+    <li>Adjust Yana's configuration and watch predicted share change.</li>
+    <li>Test price sensitivity: what happens at ₹85,000? At ₹1,40,000?</li>
+    <li>Identify the "kink" — the price point where share drops nonlinearly.</li>
   </ol>
 
   <div class="pause-box">
     <h3>Pause and Predict</h3>
-    <p>Before you run the cell, mark your prediction on the map. Where do you think each segment sits?</p>
+    <p>Before you run the cell, predict Yana's share for two configurations against the competitive set.</p>
 
     <table>
       <thead>
         <tr>
-          <th>Segment</th>
-          <th>My Prediction: High or Low Traction?</th>
-          <th>My Prediction: High or Low CLV?</th>
+          <th>Yana Configuration</th>
+          <th>My Predicted Share</th>
+          <th>My Reasoning</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>Tech Enthusiasts</td>
-          <td></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td>Pragmatists</td>
-          <td></td>
+          <td>Pragmatist SKU (₹1.1L, 110km, Basic, 300+ cities)</td>
+          <td>____%</td>
           <td></td>
         </tr>
         <tr>
-          <td>Price Hunters</td>
-          <td></td>
+          <td>Premium SKU (₹1.4L, 150km, Advanced, 25 cities)</td>
+          <td>____%</td>
           <td></td>
         </tr>
       </tbody>
     </table>
 
-    <p>The segment in the top-right quadrant is your beachhead.</p>
-    <p>If no segment sits there, you have a product-market fit problem, not a pricing problem.</p>
+    <p>The gap between these two shares is the strategic tension Yana faces.</p>
+    <p>A higher share usually means a lower margin. A higher margin usually means a lower share.</p>
+    <p>Your job is to find the configuration that maximizes something more important than either: <strong>contribution margin × share</strong>.</p>
     <p>Run the next cell when you are ready.</p>
   </div>
 
