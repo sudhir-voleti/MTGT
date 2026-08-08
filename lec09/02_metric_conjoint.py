@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-#  STEP 2: Metric Conjoint — Preference Discovery Lab
+#  STEP 2: Generic Metric Conjoint Analysis Tool (MVP)
 # ═══════════════════════════════════════════════════════════════════
 
 import io
@@ -10,103 +10,177 @@ import matplotlib.pyplot as plt
 from IPython.display import display, clear_output
 from sklearn.linear_model import LinearRegression
 
-# ── Guard: Step 1 must have run ──
-try:
-    metric_df
-except NameError:
-    raise RuntimeError("Run Step 1 first! Upload the CSV files.")
-
 # =============================================================================
-# PANEL A: What Do You Want to Model?
+# STATE
 # =============================================================================
 
-# Auto-detect columns from uploaded data
-all_cols = list(metric_df.columns)
-numeric_cols = [c for c in all_cols if pd.api.types.is_numeric_dtype(metric_df[c])]
-categorical_cols = [c for c in all_cols if c not in numeric_cols and c not in ['RespID', 'ProfileID', 'Segment']]
+df = None          # uploaded data
+resp_col = None    # respondent ID column
+task_col = None    # task/profile ID column
+y_col = None       # rating/choice column
+x_cols = []        # attribute columns
+dummies = None     # dataframe with dummy variables
+ib_df = None       # individual betas
+agg_model = None   # aggregate OLS model
 
-out_theory = widgets.Output()
-out_controls = widgets.Output()
-out_results = widgets.Output()
+# =============================================================================
+# PANELS
+# =============================================================================
+
+out_upload = widgets.Output()
+out_mapping = widgets.Output()
+out_analysis = widgets.Output()
 out_viz = widgets.Output()
 
-# ── Theory intro (collapsible, but visible by default) ──
-with out_theory:
-    print("=" * 60)
-    print("THEORY: What is a Part-Worth?")
-    print("=" * 60)
-    print("""
-Every respondent saw 16 product profiles and rated each one.
-Those ratings are a weighted sum of how much they like each attribute level.
+# =============================================================================
+# PHASE 1: UPLOAD
+# =============================================================================
 
-Example: A respondent who loves range and hates price might have:
-  150km range  →  +3.2 points to their rating
-  140K price   →  -2.1 points to their rating
+upload_widget = widgets.FileUpload(
+    accept='.csv', multiple=False, description='📁 Upload CSV',
+    button_style='primary', layout=widgets.Layout(width='300px'))
 
-Your job: Run one regression per respondent to recover these weights.
-Then look at the distribution across all 400 people.
-    """)
+btn_load = widgets.Button(description='▶ Load CSV', button_style='success')
 
-# ── Control panel ──
-dd_y = widgets.Dropdown(
-    options=[c for c in numeric_cols if c not in ['RespID', 'ProfileID']],
-    value='Rating' if 'Rating' in numeric_cols else numeric_cols[0],
-    description='Y (rating):',
-    layout=widgets.Layout(width='280px'))
+def on_load(_):
+    global df
+    with out_upload:
+        clear_output()
+        if not upload_widget.value:
+            print("❌ Select a CSV file first."); return
+        
+        raw = list(upload_widget.value.values())[0]['content']
+        df = pd.read_csv(io.BytesIO(raw))
+        
+        print(f"✅ Loaded: {df.shape[0]} rows × {df.shape[1]} columns")
+        print(f"   Columns: {list(df.columns)}")
+        print(f"   Numeric: {[c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]}")
+        print(f"   Categorical: {[c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])]}")
+        print("\n   First 5 rows:")
+        display(df.head())
+        
+        # Auto-detect candidates
+        build_mapping_ui()
 
-# Multi-select for X variables (attributes)
-# Auto-suggest: all categorical columns except IDs
-default_x = [c for c in categorical_cols if c not in ['RespID', 'ProfileID', 'Segment']]
-sel_x = widgets.SelectMultiple(
-    options=categorical_cols,
-    value=tuple(default_x),
-    description='X (attributes):',
-    rows=6,
-    layout=widgets.Layout(width='300px', height='180px'))
+btn_load.on_click(on_load)
 
-btn_run = widgets.Button(description='▶ Run Preference Discovery', button_style='success')
-btn_reset = widgets.Button(description='🗑 Reset', button_style='warning')
-
-status_html = widgets.HTML("<i>Select Y and X, then run.</i>")
-
-controls = widgets.VBox([
-    widgets.HTML("<h3>Build Your Model</h3>"),
-    widgets.HBox([dd_y, sel_x]),
-    widgets.HBox([btn_run, btn_reset]),
-    status_html
+upload_ui = widgets.VBox([
+    widgets.HTML("<h2>Metric Conjoint Tool: Step 1 — Upload</h2>"),
+    widgets.HTML("<p>Upload your conjoint data CSV. Must contain respondent IDs, task/profile IDs, a rating/choice column, and attribute columns.</p>"),
+    widgets.HBox([upload_widget, btn_load]),
+    out_upload
 ])
 
-with out_controls:
-    display(controls)
-
 # =============================================================================
-# PANEL B: Results (hidden until run)
+# PHASE 2: COLUMN MAPPING
 # =============================================================================
 
-# =============================================================================
-# PANEL C: Visualizations (hidden until run)
-# =============================================================================
+dd_resp = widgets.Dropdown(options=[], description='Resp ID:', layout=widgets.Layout(width='280px'))
+dd_task = widgets.Dropdown(options=[], description='Task ID:', layout=widgets.Layout(width='280px'))
+dd_y = widgets.Dropdown(options=[], description='Y (rating):', layout=widgets.Layout(width='280px'))
+sel_x = widgets.SelectMultiple(options=[], description='X (attrs):', rows=6, layout=widgets.Layout(width='300px', height='180px'))
+
+btn_map = widgets.Button(description='▶ Confirm Mapping', button_style='success')
+btn_auto = widgets.Button(description='💡 Auto-Detect', button_style='info')
+
+def build_mapping_ui():
+    with out_mapping:
+        clear_output()
+        
+        all_cols = list(df.columns)
+        numeric_cols = [c for c in all_cols if pd.api.types.is_numeric_dtype(df[c])]
+        cat_cols = [c for c in all_cols if c not in numeric_cols]
+        
+        # Update dropdowns
+        dd_resp.options = all_cols
+        dd_task.options = all_cols
+        dd_y.options = numeric_cols
+        sel_x.options = all_cols
+        
+        # Auto-guess
+        resp_guess = next((c for c in all_cols if 'resp' in c.lower() or 'id' in c.lower()), all_cols[0])
+        task_guess = next((c for c in all_cols if 'task' in c.lower() or 'profile' in c.lower() or 'trial' in c.lower()), all_cols[1] if len(all_cols) > 1 else all_cols[0])
+        y_guess = next((c for c in numeric_cols if 'rating' in c.lower() or 'choice' in c.lower() or 'score' in c.lower() or 'y' in c.lower()), numeric_cols[0] if numeric_cols else None)
+        
+        dd_resp.value = resp_guess
+        dd_task.value = task_guess
+        if y_guess:
+            dd_y.value = y_guess
+        
+        # Auto-guess X: all non-ID, non-Y columns
+        auto_x = [c for c in all_cols if c not in [resp_guess, task_guess, y_guess]]
+        sel_x.value = tuple(auto_x)
+        
+        display(widgets.HTML("<h3>Step 2 — Map Columns</h3>"))
+        display(widgets.HBox([dd_resp, dd_task, dd_y]))
+        display(sel_x)
+        display(widgets.HBox([btn_auto, btn_map]))
+
+def on_auto(_):
+    build_mapping_ui()
+
+def on_map(_):
+    global resp_col, task_col, y_col, x_cols
+    
+    resp_col = dd_resp.value
+    task_col = dd_task.value
+    y_col = dd_y.value
+    x_cols = list(sel_x.value)
+    
+    with out_mapping:
+        clear_output()
+        print("="*60)
+        print("COLUMN MAPPING CONFIRMED")
+        print("="*60)
+        print(f"  Respondent ID : {resp_col}")
+        print(f"  Task/Profile  : {task_col}")
+        print(f"  Y variable    : {y_col}")
+        print(f"  X attributes  : {x_cols}")
+        
+        # Validate
+        n_resp = df[resp_col].nunique()
+        n_tasks = df[task_col].nunique()
+        print(f"\n  Respondents   : {n_resp}")
+        print(f"  Tasks/profiles: {n_tasks}")
+        print(f"  Rows per resp : {len(df) / n_resp:.1f}")
+        
+        if len(x_cols) == 0:
+            print("\n❌ Select at least one X attribute.")
+            return
+        
+        print("\n✅ Mapping locked. Run analysis next.")
+
+btn_auto.on_click(on_auto)
+btn_map.on_click(on_map)
 
 # =============================================================================
-# HELPERS
+# PHASE 3: RUN ANALYSIS
 # =============================================================================
 
-def make_dummies(df, cols):
+btn_run = widgets.Button(description='▶ Run Analysis', button_style='success', layout=widgets.Layout(width='200px'))
+
+def make_dummies(df_in, cols, resp_id_col):
     """Create dummy variables for selected categorical columns."""
-    dummies = df.copy()
+    out = df_in.copy()
     dummy_cols = []
     
     for col in cols:
-        unique_vals = sorted(df[col].dropna().unique())
-        # Skip first as reference
+        unique_vals = sorted(df_in[col].dropna().unique())
+        if len(unique_vals) < 2:
+            continue  # Skip single-level attributes
+        
+        # Use first value as reference
+        ref = unique_vals[0]
         for val in unique_vals[1:]:
-            dummy_name = f"d_{col}_{val}"
-            dummies[dummy_name] = (df[col] == val).astype(int)
+            dummy_name = f"d_{col}_{str(val).replace(' ', '_')}"
+            out[dummy_name] = (df_in[col] == val).astype(int)
             dummy_cols.append(dummy_name)
+        
+        print(f"  {col}: reference = '{ref}', dummies = {len(unique_vals)-1}")
     
-    return dummies, dummy_cols
+    return out, dummy_cols
 
-def compute_importance(row, dummy_cols, attr_map):
+def compute_importance(row, attr_map):
     """Compute attribute importance from part-worths."""
     importance = {}
     for attr, dummies in attr_map.items():
@@ -118,84 +192,82 @@ def compute_importance(row, dummy_cols, attr_map):
         return {k: 0 for k in importance}
     return {k: v/total*100 for k, v in importance.items()}
 
-# =============================================================================
-# EVENT HANDLERS
-# =============================================================================
-
-individual_betas = None
-ib_df = None
-attr_map = {}
-
 def on_run(_):
-    global individual_betas, ib_df, attr_map
+    global dummies, ib_df, agg_model
     
-    with out_results:
+    with out_analysis:
         clear_output()
         
-        y_col = dd_y.value
-        x_cols = list(sel_x.value)
+        if resp_col is None or y_col is None or len(x_cols) == 0:
+            print("❌ Complete Step 2 (column mapping) first.")
+            return
         
-        if not x_cols:
-            print("❌ Select at least one X variable."); return
-        
-        print(f"Y = {y_col}")
-        print(f"X = {', '.join(x_cols)}")
-        print("\n" + "="*60)
-        print("STEP 1: Aggregate OLS (What does the average person want?)")
+        print("="*60)
+        print("RUNNING METRIC CONJOINT ANALYSIS")
         print("="*60)
         
-        # Make dummies
-        dummies, dummy_cols = make_dummies(metric_df, x_cols)
+        # Step 3a: Create dummies
+        print("\n--- Creating Dummy Variables ---")
+        dummies, dummy_cols = make_dummies(df, x_cols, resp_col)
+        
+        if len(dummy_cols) == 0:
+            print("❌ No valid dummy variables created. Check X attributes.")
+            return
+        
+        # Build attr_map
         attr_map = {}
         for col in x_cols:
             attr_map[col] = [d for d in dummy_cols if d.startswith(f"d_{col}_")]
         
+        print(f"\nTotal dummy variables: {len(dummy_cols)}")
+        
+        # Step 3b: Aggregate OLS
+        print("\n--- Aggregate OLS ---")
         X = dummies[dummy_cols].values
         y = dummies[y_col].values
         
         agg_model = LinearRegression()
         agg_model.fit(X, y)
         
-        print(f"Intercept (baseline rating): {agg_model.intercept_:.3f}")
+        print(f"Intercept: {agg_model.intercept_:.3f}")
         print("\nPart-worths (vs reference level):")
         for col, coef in zip(dummy_cols, agg_model.coef_):
-            print(f"  {col:25s}: {coef:7.3f}")
+            print(f"  {col:30s}: {coef:7.3f}")
         
-        # Attribute importance
+        # Aggregate importance
         agg_pws = {'Intercept': agg_model.intercept_}
         for d, c in zip(dummy_cols, agg_model.coef_):
             agg_pws[d] = c
         
         imp = {}
-        for attr, dummies in attr_map.items():
-            pws = [agg_pws.get(d, 0) for d in dummies]
+        for attr, dummies_list in attr_map.items():
+            pws = [agg_pws.get(d, 0) for d in dummies_list]
             imp[attr] = max(pws) - min(pws)
         total_imp = sum(imp.values())
         
         print("\nAttribute Importance (%):")
         for attr, val in sorted(imp.items(), key=lambda x: -x[1]):
-            print(f"  {attr:15s}: {val/total_imp*100:5.1f}%")
+            print(f"  {attr:20s}: {val/total_imp*100:5.1f}%")
         
-        # ── Individual-level models ──
-        print("\n" + "="*60)
-        print("STEP 2: Individual Models (400 regressions, one per person)")
-        print("="*60)
-        
+        # Step 3c: Individual-level OLS
+        print("\n--- Individual-Level Models ---")
         individual_betas = []
         n_estimated = 0
+        n_skipped = 0
         
-        for resp_id in metric_df['RespID'].unique():
-            resp_data = dummies[dummies['RespID'] == resp_id].copy()
+        for resp_id in dummies[resp_col].unique():
+            resp_data = dummies[dummies[resp_col] == resp_id].copy()
             Xi = resp_data[dummy_cols].values
             yi = resp_data[y_col].values
             
-            if np.any(Xi.std(axis=0) == 0):
+            if len(yi) < 2 or np.any(Xi.std(axis=0) == 0):
+                n_skipped += 1
                 continue
             
             mi = LinearRegression()
             mi.fit(Xi, yi)
             
-            row = {'RespID': resp_id}
+            row = {resp_col: resp_id}
             for d, c in zip(dummy_cols, mi.coef_):
                 row[d] = c
             row['Intercept'] = mi.intercept_
@@ -204,195 +276,216 @@ def on_run(_):
         
         ib_df = pd.DataFrame(individual_betas)
         print(f"Estimated: {n_estimated} individual models")
+        print(f"Skipped  : {n_skipped} (insufficient variation)")
         
         # Compute importance per person
         imp_records = []
         for _, row in ib_df.iterrows():
-            imp = compute_importance(row, dummy_cols, attr_map)
+            imp = compute_importance(row, attr_map)
             imp_records.append(imp)
         
         imp_df = pd.DataFrame(imp_records)
-        imp_df['RespID'] = ib_df['RespID'].values
+        imp_df[resp_col] = ib_df[resp_col].values
         
-        print("\nMean importance across all respondents:")
-        print(imp_df.drop('RespID', axis=1).mean().round(1).sort_values(ascending=False))
+        print("\nMean importance across respondents:")
+        print(imp_df.drop(resp_col, axis=1).mean().round(1).sort_values(ascending=False))
         
-        # Store for viz
+        # Store in globals for viz
         import builtins
         builtins.ib_df = ib_df
         builtins.imp_df = imp_df
         builtins.attr_map = attr_map
         builtins.dummy_cols = dummy_cols
+        builtins.metric_tool_attr_map = attr_map
+        builtins.metric_tool_dummy_cols = dummy_cols
+        builtins.metric_tool_resp_col = resp_col
         
-        print("\n✅ Models stored. Visualizations below.")
+        print("\n✅ Analysis complete. Visualizations below.")
     
-    # ── Render visualizations ──
+    # Render viz
     with out_viz:
         clear_output()
-        render_visualizations(ib_df, imp_df, attr_map, dummy_cols)
+        render_visualizations(ib_df, imp_df, attr_map, dummy_cols, resp_col)
 
-def render_visualizations(ib_df, imp_df, attr_map, dummy_cols):
-    """Create the 2×2 visualization grid."""
+btn_run.on_click(on_run)
+
+# =============================================================================
+# PHASE 4: VISUALIZATIONS
+# =============================================================================
+
+def render_visualizations(ib_df, imp_df, attr_map, dummy_cols, resp_col):
+    """Create adaptive 2×2 visualization grid from any conjoint data."""
     
     fig, axes = plt.subplots(2, 2, figsize=(14, 11))
     
-    # ── Plot 1: Boxplot of individual part-worths (top 4 attributes) ──
+    # ── Plot 1: Boxplot of top part-worths ──
     ax = axes[0, 0]
     
-    # Pick top 4 attributes by mean importance
-    mean_imp = imp_df.drop('RespID', axis=1).mean().sort_values(ascending=False)
-    top4_attrs = list(mean_imp.index[:4])
+    # Top 4 attributes by mean importance
+    mean_imp = imp_df.drop(resp_col, axis=1).mean().sort_values(ascending=False)
+    top4_attrs = list(mean_imp.index[:min(4, len(mean_imp))])
     
     box_data = []
     box_labels = []
     for attr in top4_attrs:
-        dummies = attr_map.get(attr, [])
-        for d in dummies:
+        dummies_list = attr_map.get(attr, [])
+        for d in dummies_list[:2]:  # Max 2 dummies per attr to avoid clutter
             if d in ib_df.columns:
-                box_data.append(ib_df[d].dropna().values)
-                box_labels.append(d.replace('d_', '').replace('_', ' '))
+                vals = ib_df[d].dropna().values
+                if len(vals) > 0:
+                    box_data.append(vals)
+                    box_labels.append(d.replace('d_', '').replace('_', ' ')[:20])
     
     if box_data:
         bp = ax.boxplot(box_data, labels=box_labels, patch_artist=True)
-        colors = ['#2c7a7b', '#718096', '#d69e2e', '#e53e3e'] * 3
+        colors = ['#2c7a7b', '#718096', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20']
         for patch, color in zip(bp['boxes'], colors):
             patch.set_facecolor(color)
             patch.set_alpha(0.6)
         ax.set_ylabel('Part-Worth')
-        ax.set_title('Dispersion of Individual Part-Worths\n(Each dot = one person\'s preference weight)')
+        ax.set_title('Dispersion of Individual Part-Worths')
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=30, ha='right')
+    else:
+        ax.text(0.5, 0.5, 'No valid part-worths to plot', ha='center', va='center', transform=ax.transAxes)
     
     # ── Plot 2: Scatter of top 2 part-worths ──
     ax = axes[0, 1]
     
-    # Top 2 most important dummies
-    all_dummies = [d for dummies in attr_map.values() for d in dummies if d in ib_df.columns]
-    dummy_means = [(d, ib_df[d].abs().mean()) for d in all_dummies]
-    dummy_means.sort(key=lambda x: -x[1])
-    
-    if len(dummy_means) >= 2:
+    all_dummies = [d for dummies_list in attr_map.values() for d in dummies_list if d in ib_df.columns]
+    if len(all_dummies) >= 2:
+        dummy_means = [(d, ib_df[d].abs().mean()) for d in all_dummies]
+        dummy_means.sort(key=lambda x: -x[1])
         d1, d2 = dummy_means[0][0], dummy_means[1][0]
         
-        # Color by segment if available
-        if 'Segment' in metric_df.columns:
-            seg_colors = {'Tech': '#2c7a7b', 'Pragmatist': '#d69e2e', 'PriceHunter': '#e53e3e'}
-            for seg in metric_df['Segment'].unique():
-                resp_ids = metric_df[metric_df['Segment'] == seg]['RespID'].unique()
-                mask = ib_df['RespID'].isin(resp_ids)
+        # Check for segment column
+        seg_col = None
+        for c in ['Segment', 'segment', 'Cluster', 'cluster', 'Group', 'group']:
+            if c in df.columns:
+                seg_col = c
+                break
+        
+        if seg_col:
+            seg_map = df.groupby(resp_col)[seg_col].first().to_dict()
+            ib_df['_seg'] = ib_df[resp_col].map(seg_map)
+            segments = ib_df['_seg'].dropna().unique()
+            colors = ['#2c7a7b', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20']
+            for i, seg in enumerate(segments[:5]):
+                mask = ib_df['_seg'] == seg
                 ax.scatter(ib_df.loc[mask, d1], ib_df.loc[mask, d2],
-                          alpha=0.4, s=25, c=seg_colors.get(seg, '#718096'), label=seg)
-            ax.legend(title='True Segment', loc='best')
+                          alpha=0.4, s=25, c=colors[i % len(colors)], label=str(seg))
+            ax.legend(title=seg_col, loc='best')
         else:
             ax.scatter(ib_df[d1], ib_df[d2], alpha=0.4, s=25, c='#718096')
         
-        ax.set_xlabel(f"{d1.replace('d_', '').replace('_', ' ')} part-worth")
-        ax.set_ylabel(f"{d2.replace('d_', '').replace('_', ' ')} part-worth")
-        ax.set_title('Preference Landscape: Top 2 Part-Worths\n(Each point = one respondent)')
+        ax.set_xlabel(f"{d1.replace('d_', '').replace('_', ' ')[:25]}")
+        ax.set_ylabel(f"{d2.replace('d_', '').replace('_', ' ')[:25]}")
+        ax.set_title('Preference Landscape: Top 2 Part-Worths')
         ax.axhline(0, color='gray', linestyle='--', alpha=0.3)
         ax.axvline(0, color='gray', linestyle='--', alpha=0.3)
+    else:
+        ax.text(0.5, 0.5, 'Need ≥2 dummy variables', ha='center', va='center', transform=ax.transAxes)
     
-    # ── Plot 3: Attribute importance by segment (if segment known) ──
+    # ── Plot 3: Attribute importance by segment ──
     ax = axes[1, 0]
     
-    if 'Segment' in metric_df.columns:
-        # Merge segment labels
-        seg_map = metric_df.groupby('RespID')['Segment'].first().to_dict()
-        imp_df['Segment'] = imp_df['RespID'].map(seg_map)
+    if seg_col and len(top4_attrs) > 0:
+        imp_df['_seg'] = imp_df[resp_col].map(seg_map)
+        seg_imp = imp_df.groupby('_seg')[top4_attrs].mean()
         
-        seg_imp = imp_df.groupby('Segment')[top4_attrs].mean()
         x = np.arange(len(top4_attrs))
-        w = 0.25
+        w = 0.8 / len(seg_imp)
         
-        for i, (seg, color) in enumerate(zip(seg_imp.index, ['#2c7a7b', '#d69e2e', '#e53e3e'])):
-            ax.bar(x + i*w, seg_imp.loc[seg], w, label=seg, color=color, edgecolor='black')
+        for i, (seg, color) in enumerate(zip(seg_imp.index, colors)):
+            ax.bar(x + i*w, seg_imp.loc[seg], w, label=str(seg), color=color, edgecolor='black')
         
-        ax.set_xticks(x + w)
+        ax.set_xticks(x + w * (len(seg_imp)-1) / 2)
         ax.set_xticklabels(top4_attrs, rotation=15, ha='right')
         ax.set_ylabel('Importance (%)')
-        ax.set_title('Attribute Importance by Segment\n(Do early adopters and pragmatists want different things?)')
+        ax.set_title('Attribute Importance by Segment')
         ax.legend()
     else:
-        ax.text(0.5, 0.5, 'No segment labels in data', ha='center', va='center', transform=ax.transAxes)
-        ax.set_title('Segment comparison unavailable')
+        ax.text(0.5, 0.5, 'No segment labels found', ha='center', va='center', transform=ax.transAxes)
     
-    # ── Plot 4: The "Socratic" plot — Where is the chasm? ──
+    # ── Plot 4: Chasm map (price vs. tech, if available) ──
     ax = axes[1, 1]
     
-    # Plot: Price sensitivity vs. Smart feature preference
-    # These two usually diverge across segments
-    price_cols = [d for d in dummy_cols if 'Price' in d]
-    smart_cols = [d for d in dummy_cols if 'Smart' in d]
+    # Auto-detect price and tech columns
+    price_cols = [d for d in dummy_cols if any(k in d.lower() for k in ['price', 'cost'])]
+    tech_cols = [d for d in dummy_cols if any(k in d.lower() for k in ['smart', 'tech', 'feature', 'advanced'])]
     
-    if price_cols and smart_cols and 'Segment' in metric_df.columns:
-        # Compute per-person price sensitivity (max price PW) and smart preference
+    if price_cols and tech_cols and seg_col:
         ib_df['Price_Sensitivity'] = ib_df[price_cols].max(axis=1) - ib_df[price_cols].min(axis=1)
-        ib_df['Smart_Preference'] = ib_df[smart_cols].mean(axis=1)
-        ib_df['Segment'] = ib_df['RespID'].map(seg_map)
+        ib_df['Tech_Appetite'] = ib_df[tech_cols].mean(axis=1)
         
-        for seg, color in zip(ib_df['Segment'].unique(), ['#2c7a7b', '#d69e2e', '#e53e3e']):
-            mask = ib_df['Segment'] == seg
-            ax.scatter(ib_df.loc[mask, 'Price_Sensitivity'], ib_df.loc[mask, 'Smart_Preference'],
-                      alpha=0.4, s=30, c=color, label=seg)
+        for seg, color in zip(ib_df['_seg'].unique(), colors):
+            mask = ib_df['_seg'] == seg
+            ax.scatter(ib_df.loc[mask, 'Price_Sensitivity'], ib_df.loc[mask, 'Tech_Appetite'],
+                      alpha=0.4, s=30, c=color, label=str(seg))
         
         ax.set_xlabel('Price Sensitivity (range of price part-worths)')
-        ax.set_ylabel('Smart Feature Preference')
-        ax.set_title('The Chasm Map: Price vs. Tech Appetite\n(Where do your segments sit?)')
-        ax.legend(title='Segment')
+        ax.set_ylabel('Tech/Feature Appetite')
+        ax.set_title('The Chasm Map')
+        ax.legend(title=seg_col)
         ax.axhline(0, color='gray', linestyle='--', alpha=0.3)
         ax.axvline(0, color='gray', linestyle='--', alpha=0.3)
-        
-        # Quadrant labels
-        ax.text(0.95, 0.95, 'Price Hunters\n(Low tech, high price sensitivity)', 
-               transform=ax.transAxes, ha='right', va='top', fontsize=9, 
-               bbox=dict(boxstyle='round', facecolor='#fff5f5', edgecolor='#e53e3e'))
-        ax.text(0.05, 0.95, 'Tech Enthusiasts\n(High tech, low price sensitivity)', 
-               transform=ax.transAxes, ha='left', va='top', fontsize=9,
-               bbox=dict(boxstyle='round', facecolor='#e6fffa', edgecolor='#2c7a7b'))
     else:
-        ax.text(0.5, 0.5, 'Chasm map requires Price and Smart attributes', 
-               ha='center', va='center', transform=ax.transAxes)
+        # Fallback: show correlation matrix of top attributes
+        if len(top4_attrs) >= 2:
+            corr_data = imp_df[top4_attrs].corr()
+            im = ax.imshow(corr_data, cmap='RdBu_r', vmin=-1, vmax=1)
+            ax.set_xticks(range(len(top4_attrs)))
+            ax.set_yticks(range(len(top4_attrs)))
+            ax.set_xticklabels(top4_attrs, rotation=45, ha='right')
+            ax.set_yticklabels(top4_attrs)
+            ax.set_title('Attribute Importance Correlations')
+            plt.colorbar(im, ax=ax)
+        else:
+            ax.text(0.5, 0.5, 'Need price + tech attributes\nfor chasm map', ha='center', va='center', transform=ax.transAxes)
     
     plt.tight_layout()
     plt.show()
     
     # ── Socratic questions ──
     print("\n" + "="*60)
-    print("SOCRATIC QUESTIONS")
+    print("DISCUSSION QUESTIONS")
     print("="*60)
-    print("""
-1. Look at the boxplot (top-left). Which attribute has the widest dispersion?
-   → Wide dispersion = people disagree. That is your segmentation opportunity.
+    print(f"""
+1. DISPERSION: Which attribute has the widest spread in part-worths?
+   → Wide spread = people disagree. That is your segmentation opportunity.
 
-2. Look at the scatter (top-right). Are there distinct clouds of points?
-   → If yes, you have found tribes. If no, the market is homogeneous.
+2. TRIBES: Look at the scatter plot. Are there distinct clouds of points?
+   → If yes, you have found preference tribes.
 
-3. Look at the segment bars (bottom-left). Which attribute most separates
-   the segments? → That is where the chasm lives.
+3. SEGMENTS: Do the segment bars diverge on any attribute?
+   → Where they diverge = where the chasm lives.
 
-4. Look at the chasm map (bottom-right). Where would you place the S1?
-   Where would you place a Pragmatist SKU?
+4. YOUR PRODUCT: Where would you place your current product on the chasm map?
+   Where would you place a product for the pragmatist beachhead?
     """)
 
-def on_reset(_):
-    with out_results:
-        clear_output()
-    with out_viz:
-        clear_output()
-    status_html.value = "<i>Select Y and X, then run.</i>"
-
-btn_run.on_click(on_run)
-btn_reset.on_click(on_reset)
-
 # =============================================================================
-# ASSEMBLE UI
+# ASSEMBLE FULL UI
 # =============================================================================
 
-ui = widgets.VBox([
-    widgets.HTML("<h2>Step 2: Preference Discovery Lab</h2>"),
-    out_theory,
-    out_controls,
-    out_results,
+analysis_ui = widgets.VBox([
+    widgets.HTML("<h3>Step 3 — Run Analysis</h3>"),
+    btn_run,
+    out_analysis
+])
+
+viz_ui = widgets.VBox([
     out_viz
 ])
 
-display(ui)
+full_ui = widgets.VBox([
+    widgets.HTML("<h2>Generic Metric Conjoint Analysis Tool</h2>"),
+    upload_ui,
+    widgets.HTML("<hr>"),
+    out_mapping,
+    widgets.HTML("<hr>"),
+    analysis_ui,
+    widgets.HTML("<hr>"),
+    viz_ui
+])
+
+display(full_ui)
