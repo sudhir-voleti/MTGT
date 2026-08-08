@@ -39,7 +39,7 @@ config_status = widgets.HTML("<i>Load MNL coefficients first.</i>")
 config_panel = widgets.VBox([])
 
 # --- Competitor panel ---
-comp_price = widgets.Dropdown(options=['85K', '110K', '140K'], value='95K', description='Comp Price:')
+comp_price = widgets.Dropdown(options=['85K', '110K', '140K'], value='110K', description='Comp Price:')
 comp_service = widgets.Dropdown(options=['25cities', '100cities', '300cities'], value='300cities', description='Comp Service:')
 comp_btn = widgets.Button(description='Set Competitors', button_style='info')
 
