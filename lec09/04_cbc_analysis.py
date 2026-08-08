@@ -283,63 +283,85 @@ def on_lock(_):
     builtins.dummy_cols = dummy_cols
     builtins.attr_cols = attr_cols
     
-    render_viz(cbc_dummies, dummy_cols, attr_cols, mnl_agg)
+    render_viz(cbc_dummies, dummy_cols, attr_cols, mnl_agg, choice_col, task_col, resp_col)
 
-def render_choice_summary(cbc_dummies, attr_cols, choice_col, task_col, resp_col):
-    """Show which product profiles won most often."""
+def render_viz(cbc_dummies, dummy_cols, attr_cols, mnl_agg, choice_col, task_col, resp_col):
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
-    lines = []
-    lines.append("\n" + "="*60)
-    lines.append("CHOICE SUMMARY: What Product Profiles Won?")
-    lines.append("="*60)
+    # Plot 1: Coefficient plot
+    ax = axes[0]
+    coefs = mnl_agg.coef_[0]
+    colors = ['#2c7a7b' if c > 0 else '#e53e3e' for c in coefs]
+    y_pos = np.arange(len(dummy_cols))
+    ax.barh(y_pos, coefs, color=colors, edgecolor='black')
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([d.replace('d_', '').replace('_', ' ')[:20] for d in dummy_cols], fontsize=9)
+    ax.set_xlabel('Log-Odds Coefficient')
+    ax.set_title('MNL Coefficients: What Drives Choice?')
+    ax.axvline(0, color='gray', linestyle='--', alpha=0.5)
     
-    # Build profile signature from attributes
-    profile_cols = attr_cols + [resp_col, task_col, choice_col]
-    if all(c in cbc_dummies.columns for c in profile_cols):
-        # Only Yana alternatives (exclude None)
-        yana_mask = cbc_dummies[choice_col].notna()  # All rows have choice
-        # Actually: None is typically AltID=max or has 'None' in attributes
-        # Heuristic: rows where all attributes are non-null are Yana products
-        yana_mask = cbc_dummies[attr_cols].notna().all(axis=1)
-        
-        # Sum choices by attribute combination
-        profile_choices = cbc_dummies[yana_mask].groupby(attr_cols)[choice_col].agg(['sum', 'count', 'mean'])
-        profile_choices = profile_choices.sort_values('sum', ascending=False)
-        profile_choices.columns = ['Times_Chosen', 'Times_Shown', 'Choice_Rate']
-        
-        lines.append(f"\nTop 10 most-chosen product profiles:")
-        lines.append(str(profile_choices.head(10).round(3)))
-        
-        # Best profile
-        best = profile_choices.index[0]
-        lines.append(f"\n🏆 Most popular profile:")
-        for attr, val in zip(attr_cols, best):
-            lines.append(f"  {attr:15s}: {val}")
-        lines.append(f"  Chosen {profile_choices.iloc[0]['Times_Chosen']:.0f} times "
-                    f"({profile_choices.iloc[0]['Choice_Rate']:.1%} rate)")
-        
-        # Worst profile
-        worst = profile_choices.index[-1]
-        lines.append(f"\n💀 Least popular profile:")
-        for attr, val in zip(attr_cols, worst):
-            lines.append(f"  {attr:15s}: {val}")
-        lines.append(f"  Chosen {profile_choices.iloc[-1]['Times_Chosen']:.0f} times "
-                    f"({profile_choices.iloc[-1]['Choice_Rate']:.1%} rate)")
-    
-    # Attribute-level win rates
-    lines.append("\n" + "="*60)
-    lines.append("ATTRIBUTE-LEVEL WIN RATES")
-    lines.append("="*60)
-    
+    # Plot 2: Attribute importance from MNL
+    ax = axes[1]
+    attr_imp = {}
     for attr in attr_cols:
-        if attr in cbc_dummies.columns:
-            attr_win = cbc_dummies.groupby(attr)[choice_col].agg(['sum', 'count', 'mean'])
-            attr_win.columns = ['Wins', 'Appearances', 'Win_Rate']
-            attr_win = attr_win.sort_values('Win_Rate', ascending=False)
-            lines.append(f"\n{attr}:")
-            lines.append(str(attr_win.round(3)))
+        attr_dummies = [d for d in dummy_cols if d.startswith(f"d_{attr}_")]
+        if attr_dummies:
+            attr_coefs = [coefs[dummy_cols.index(d)] for d in attr_dummies]
+            attr_imp[attr] = max(attr_coefs) - min(attr_coefs)
     
-    return "\n".join(lines)
+    if attr_imp:
+        sorted_imp = sorted(attr_imp.items(), key=lambda x: -x[1])
+        names = [x[0] for x in sorted_imp]
+        vals = [x[1] for x in sorted_imp]
+        colors2 = ['#2c7a7b', '#718096', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20']
+        ax.barh(names[::-1], vals[::-1], color=colors2[:len(names)][::-1], edgecolor='black')
+        ax.set_xlabel('Importance (max - min coefficient)')
+        ax.set_title('Attribute Importance from MNL')
+    else:
+        ax.text(0.5, 0.5, 'No attributes to plot', ha='center', transform=ax.transAxes)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Plot 3: Win rate by attribute levels
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    
+    win_data = []
+    win_labels = []
+    for attr in attr_cols[:min(4, len(attr_cols))]:
+        if attr in cbc_dummies.columns:
+            levels = sorted(cbc_dummies[attr].dropna().unique())
+            for lvl in levels:
+                mask = cbc_dummies[attr] == lvl
+                rate = cbc_dummies.loc[mask, choice_col].mean()
+                win_data.append(rate)
+                win_labels.append(f"{attr[:8]}={str(lvl)[:10]}")
+    
+    if win_data:
+        colors3 = ['#2c7a7b' if r > 0.5 else '#e53e3e' for r in win_data]
+        y_pos = np.arange(len(win_data))
+        ax2.barh(y_pos, win_data, color=colors3, edgecolor='black')
+        ax2.set_yticks(y_pos)
+        ax2.set_yticklabels(win_labels, fontsize=9)
+        ax2.set_xlabel('Choice Rate (fraction of times chosen when shown)')
+        ax2.set_title('Win Rate by Attribute Level: What Wins When Shown?')
+        ax2.axvline(0.5, color='gray', linestyle='--', alpha=0.5)
+        ax2.set_xlim(0, 1)
+        plt.tight_layout()
+        plt.show()
+    
+    questions = """
+    <div style="background:#fffbeb; border:2px dashed #f59e0b; border-radius:12px; padding:16px; margin:12px 0;">
+    <h4 style="margin-top:0; color:#b45309;">Discussion Questions</h4>
+    <ol style="color:#78350f;">
+    <li><b>Signs:</b> Which coefficients are positive? Negative? What does that mean for your product?</li>
+    <li><b>Price:</b> Is the price coefficient the largest in magnitude? If not, what is?</li>
+    <li><b>WTP:</b> Which feature has the highest willingness-to-pay? Is it worth building?</li>
+    <li><b>Win Rates:</b> Which attribute level wins most often when shown? Is it the same as the highest coefficient?</li>
+    </ol>
+    </div>
+    """
+    viz_panel.children = [widgets.HTML(questions)]
 
 def on_reset(_):
     global seg_col
