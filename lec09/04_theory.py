@@ -68,60 +68,92 @@ display(HTML("""
   .caselet-body tr:nth-child(even) td {
     background-color: #f8fafc;
   }
+  .caselet-body .formula {
+    font-size: 1.05em;
+    font-weight: 600;
+    text-align: center;
+    margin: 16px 0;
+    color: #003366;
+    background: #f8fafc;
+    padding: 12px 14px;
+    border-radius: 6px;
+    line-height: 1.5;
+  }
 </style>
 
 <div class="caselet-body">
 
-  <h1>Step 4: Market Simulator — Who Wins When Everyone Is in the Room?</h1>
-  <div class="subtitle">From Utilities to Market Shares</div>
+  <h1>Step 4: Choice-Based Conjoint — Do They Actually Choose You?</h1>
+  <div class="subtitle">From Ratings to Decisions</div>
 
-  <p>You now know what individuals value. The next question is what happens when everyone shows up at the same time.</p>
+  <p>In Step 2, you learned what people like in isolation. In Step 3, you found tribes of similar preference.</p>
+  <p>Now comes the harder question: <strong>When forced to choose among real alternatives, what do they actually do?</strong></p>
 
-  <p>A market simulator takes the MNL model from Step 3 and drops it into a competitive scenario. You define the attributes of every competitor. The model predicts the probability that each customer type chooses each product. Sum those probabilities across segments, weighted by segment size, and you have a market share forecast.</p>
+  <p>Metric conjoint asks: "Rate this product 1 to 10." CBC asks: "Pick one."</p>
+  <p>These are different cognitive tasks. A product rated 8/10 in isolation may never be chosen when a competitor is rated 9/10.</p>
+  <p>The market is not a rating contest. It is a choice tournament.</p>
 
-  <h2>1. The Simulation Logic</h2>
-  <p>For any product configuration, compute its utility U. Then compute choice probability against the competitive set. Repeat for every segment. Weight by segment prevalence.</p>
+  <h2>1. The Logit Model</h2>
+  <p>The multinomial logit (MNL) model converts utilities into choice probabilities:</p>
 
-  <p>The formula is the same logit ratio, but now you are running it retrospectively for products that do not yet exist. That is the power of conjoint: it lets you test configurations before you tool the factory.</p>
+  <div class="formula">
+    P(choose j) = exp(Uⱼ) / Σ exp(Uₖ)
+  </div>
 
-  <h2>2. What You Will Do Now</h2>
-  <p>The code cell below will open a market simulator dashboard. You will:</p>
+  <p>Where Uⱼ is the systematic utility of alternative j. The coefficients tell you how much each attribute changes the log-odds of being chosen.</p>
+
+  <h2>2. Willingness to Pay</h2>
+  <p>Because price is an attribute in the model, you can compute WTP:</p>
+
+  <div class="formula">
+    WTP = −β_attribute / β_price
+  </div>
+
+  <p>This is the rupee amount that makes a customer indifferent to the tradeoff.</p>
+  <p>If WTP for fast charging is ₹12,000 but engineering cost is ₹4,000, you have a profitable feature.</p>
+
+  <h2>3. What You Will Do Now</h2>
+  <p>The code cell below opens the CBC Analysis Tool. You will:</p>
   <ol>
-    <li>Set the competitive baseline (Honda, Ola, Ather).</li>
-    <li>Adjust Yana's configuration and watch the predicted share change.</li>
-    <li>Test price sensitivity: what happens at ₹85,000? At ₹1,40,000?</li>
-    <li>Identify the "kink" — the price point where share drops nonlinearly.</li>
+    <li>Upload or inherit CBC data from the caselet files.</li>
+    <li>Map columns: respondent ID, task ID, alternative ID, choice indicator, and attributes.</li>
+    <li>Estimate aggregate and segment-specific MNL models.</li>
+    <li>Compute WTP for every attribute level.</li>
+    <li>Compare attribute ranking from CBC against your metric conjoint ranking.</li>
   </ol>
 
   <div class="pause-box">
     <h3>Pause and Predict</h3>
-    <p>Before you run the cell, predict Yana's share for two configurations against the competitive set described in Q4 of the caselet.</p>
+    <p>Before you run the cell, predict which will be larger: WTP for "150 km range" or WTP for "300+ cities service network". Then predict which will have a larger coefficient in the MNL model.</p>
 
     <table>
       <thead>
         <tr>
-          <th>Yana Configuration</th>
-          <th>My Predicted Share</th>
-          <th>My Reasoning</th>
+          <th>Attribute Level</th>
+          <th>My WTP Prediction</th>
+          <th>Why?</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>Pragmatist SKU (₹1.1L, 110km, Basic, 300+ cities)</td>
-          <td>____%</td>
+          <td>150 km range vs 75 km</td>
+          <td>₹_____</td>
           <td></td>
         </tr>
         <tr>
-          <td>Premium SKU (₹1.4L, 150km, Advanced, 25 cities)</td>
-          <td>____%</td>
+          <td>300+ cities vs 25 cities</td>
+          <td>₹_____</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>Advanced vs Basic smart features</td>
+          <td>₹_____</td>
           <td></td>
         </tr>
       </tbody>
     </table>
 
-    <p>The gap between these two shares is the strategic tension Yana faces.</p>
-    <p>A higher share usually means a lower margin. A higher margin usually means a lower share.</p>
-    <p>Your job is to find the configuration that maximizes something more important than either: <strong>contribution margin × share</strong>.</p>
+    <p>If your WTP predictions do not match the MNL output, ask yourself: did I overestimate what people say they value, or underestimate what they choose when forced to trade?</p>
     <p>Run the next cell when you are ready.</p>
   </div>
 
