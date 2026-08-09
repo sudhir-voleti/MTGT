@@ -222,7 +222,8 @@ def run_inspection():
     # Scribble pause
     # -------------------------------------------------------------------------
 
-    display(HTML("""
+    # Use string concatenation instead of .format() to avoid CSS curly brace conflicts
+    html_content = """
     <style>
       .caselet-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; 
                       font-size: 15px; line-height: 1.55; color: #1e293b; max-width: 860px; margin: 0 auto; }
@@ -241,7 +242,7 @@ def run_inspection():
     <div class="caselet-body">
       <div class="pause-box">
         <h3>Pause and Reflect: Which Would You Choose?</h3>
-        <p>Look at the sample choice task above. If you were Respondent {sample_resp}, which alternative would you pick?</p>
+        <p>Look at the sample choice task above. If you were Respondent """ + str(sample_resp) + """, which alternative would you pick?</p>
         <table class="scribble-table">
           <thead>
             <tr><th>My Choice (AltID)</th><th>Why I would choose this</th><th>What I would sacrifice</th></tr>
@@ -257,4 +258,5 @@ def run_inspection():
         <p style="margin-top:12px;"><strong>Next:</strong> Run 04c_mnl.py to estimate the choice model and see what the <em>aggregate</em> market actually prefers.</p>
       </div>
     </div>
-    """.format(sample_resp=sample_resp)))
+    """
+    display(HTML(html_content))
