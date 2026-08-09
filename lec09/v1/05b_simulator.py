@@ -2,6 +2,7 @@
 """
 Lec09 — Step 5b: Market Simulator (Generic)
 Interactive product configurator + 'Simulate Market' button.
+Features: reference levels table, pie chart for shares, segment breakdown.
 Pure code cell. Run AFTER 05a_theory.py in a separate Colab cell.
   exec(requests.get('https://raw.githubusercontent.com/sudhir-voleti/MTGT/main/lec09/v1/05b_simulator.py').text)
 """
@@ -43,7 +44,7 @@ else:
     display(upload_widget)
 
 # =============================================================================
-# 2. Parse dummy columns to reconstruct attribute levels
+# 2. Parse dummy columns to reconstruct attribute levels + reference
 # =============================================================================
 
 def parse_attributes(ib_df):
@@ -59,12 +60,9 @@ def parse_attributes(ib_df):
             continue
         attr = parts[1]
         level = parts[2]
-        attr_map.setdefault(attr, {'dummies': [], 'reference': None})
+        attr_map.setdefault(attr, {'dummies': []})
         attr_map[attr]['dummies'].append({'col': col, 'level': level})
 
-    # Infer reference level: we need to know all possible levels.
-    # Since we only have dummies for non-reference levels, we can't know the reference name
-    # from ib_df alone. We'll use the dummy level names and add a "Reference" option.
     for attr in attr_map:
         levels = [d['level'] for d in attr_map[attr]['dummies']]
         attr_map[attr]['levels'] = levels
@@ -73,7 +71,7 @@ def parse_attributes(ib_df):
     return attr_map
 
 # =============================================================================
-# 3. Build product configurator
+# 3. Build product configurator with reference levels table
 # =============================================================================
 
 def show_configurator():
@@ -87,11 +85,38 @@ def show_configurator():
     print("="*60)
     print("MARKET SIMULATOR: CONFIGURE YOUR PRODUCTS")
     print("="*60)
-    print("\nSet the attribute levels for each product in the competitive set.")
+
+    # -------------------------------------------------------------------------
+    # Reference levels table
+    # -------------------------------------------------------------------------
+
+    print("\n📋 REFERENCE LEVELS (Baseline = 0 utility)")
+    print("   These are the omitted levels in your regression. All part-worths are")
+    print("   relative to these baselines. Choose 'Reference' in a dropdown to set")
+    print("   an attribute to its baseline level (utility = 0).")
+    print()
+
+    ref_data = []
+    for attr in attrs:
+        non_ref = attr_map[attr]['levels']
+        ref_data.append({
+            'Attribute': attr,
+            'Non-Reference Levels (have part-worths)': ', '.join(non_ref),
+            'Reference Level (utility = 0)': '(baseline — select "Reference" below)'
+        })
+
+    ref_df = pd.DataFrame(ref_data)
+    display(ref_df)
+
+    print("\n" + "-"*60)
+    print("Set the attribute levels for each product in the competitive set.")
     print("The simulator will compute choice probabilities using each respondent's part-worths.")
     print()
 
-    # Build dropdowns for each product
+    # -------------------------------------------------------------------------
+    # Product configurator
+    # -------------------------------------------------------------------------
+
     products = [
         ('Product 1: Your Product (Yana)', 'Yana'),
         ('Product 2: Competitor A', 'Comp A'),
@@ -116,7 +141,6 @@ def show_configurator():
             attr_dropdowns[attr] = dd
             row_widgets.append(dd)
 
-        # Display in rows of 4
         for i in range(0, len(row_widgets), 4):
             display(widgets.HBox(row_widgets[i:i+4]))
 
@@ -135,7 +159,6 @@ def show_configurator():
     print("\n'None of these' option utility (0 = neutral, negative = less attractive):")
     display(none_util)
 
-    # Store
     _state['product_widgets'] = product_widgets
     _state['none_util'] = none_util
 
@@ -145,7 +168,7 @@ def show_configurator():
     print("   • Compute utility for each product using every respondent's part-worths")
     print("   • Apply logit choice rule: P = exp(U) / sum(exp(all U))")
     print("   • Average across 400 respondents → market share projection")
-    print("   • Show overall share + segment-specific shares (if available)")
+    print("   • Show overall share as PIE CHART + segment-specific shares")
     print("   • Estimated runtime: ~3 seconds")
     print()
 
@@ -207,12 +230,10 @@ def run_simulation():
                         u += float(resp[dummy_col]) if pd.notna(resp[dummy_col]) else 0.0
             utilities.append(u)
 
-        # Add None
         utilities.append(none_util)
 
-        # Logit probabilities
         max_u = max(utilities)
-        exp_u = np.exp(np.array(utilities) - max_u)  # numerical stability
+        exp_u = np.exp(np.array(utilities) - max_u)
         probs = exp_u / exp_u.sum()
 
         row = {'RespID': resp['RespID']}
@@ -226,7 +247,7 @@ def run_simulation():
     sim_df = pd.DataFrame(results)
 
     # -------------------------------------------------------------------------
-    # Overall shares
+    # Overall shares — PIE CHART
     # -------------------------------------------------------------------------
 
     print("\n" + "="*60)
@@ -242,16 +263,25 @@ def run_simulation():
     })
     print(share_table.to_string(index=False))
 
-    # Bar chart
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    colors = ['#E37222' if 'Yana' in name else '#003366' for name in share_table['Product']]
-    colors[-1] = '#64748b'  # None is gray
-    bars = ax.barh(share_table['Product'], share_table['Share (%)'], color=colors, edgecolor='white')
-    ax.set_xlabel('Market Share (%)', fontsize=12)
-    ax.set_title('Predicted Market Share', fontsize=13, color='#003366')
-    for bar, val in zip(bars, share_table['Share (%)']):
-        ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height()/2, 
-                f'{val:.1f}%', va='center', fontsize=11)
+    # Pie chart
+    fig, ax = plt.subplots(figsize=(8, 8))
+    labels = share_table['Product'].tolist()
+    sizes = share_table['Share (%)'].tolist()
+    colors = ['#E37222', '#003366', '#22c55e', '#64748b']
+    explode = [0.05 if 'Yana' in label else 0 for label in labels]
+
+    wedges, texts, autotexts = ax.pie(
+        sizes, labels=labels, colors=colors, explode=explode,
+        autopct='%1.1f%%', startangle=90, pctdistance=0.75,
+        wedgeprops=dict(edgecolor='white', linewidth=2)
+    )
+    for autotext in autotexts:
+        autotext.set_fontsize(12)
+        autotext.set_fontweight('bold')
+    for text in texts:
+        text.set_fontsize(11)
+
+    ax.set_title('Predicted Market Share', fontsize=14, color='#003366', pad=20)
     plt.tight_layout()
     plt.show()
 
@@ -286,14 +316,13 @@ def run_simulation():
         plt.tight_layout()
         plt.show()
 
-    # Store
     globals()['sim_df'] = sim_df
 
     # -------------------------------------------------------------------------
-    # Scribble pause
+    # Scribble pause (string concat to avoid CSS curly brace bug)
     # -------------------------------------------------------------------------
 
-    display(HTML("""
+    html_content = """
     <style>
       .caselet-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; 
                       font-size: 15px; line-height: 1.55; color: #1e293b; max-width: 860px; margin: 0 auto; }
@@ -340,9 +369,9 @@ def run_simulation():
         <p><strong>Next:</strong> Reconfigure your product and re-run the simulation. Iterate until you find the configuration that maximizes share for your target segment. Then use that insight to design your marketing campaign.</p>
       </div>
     </div>
-    """))
+    """
+    display(HTML(html_content))
 
-    # Show re-configure button
     print("\n" + "-"*60)
     print("Want to try a different configuration? Re-run this cell to adjust products.")
     print("-"*60)
