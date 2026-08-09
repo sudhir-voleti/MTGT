@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Lec09 — Conjoint Analysis Theory
+Lec09 — Conjoint Analysis Theory (v1 with scribble tables)
 Run in Colab via:
   exec(requests.get('https://raw.githubusercontent.com/sudhir-voleti/MTGT/main/lec09/v1/01_theory.py').text)
 """
@@ -93,6 +93,30 @@ display(HTML("""
     font-size: 13px;
     color: #64748b;
     margin-top: 6px;
+  }
+  .caselet-body textarea {
+    width: 100%;
+    min-height: 50px;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    box-sizing: border-box;
+    resize: vertical;
+  }
+  .caselet-body .scribble-table th {
+    background-color: #475569;
+    font-size: 13.5px;
+    padding: 9px 12px;
+  }
+  .caselet-body .scribble-table td {
+    padding: 8px 12px;
+    vertical-align: top;
+  }
+  .caselet-body .scribble-table textarea {
+    min-height: 40px;
+    font-size: 13px;
   }
 </style>
 
@@ -295,7 +319,63 @@ display(HTML("""
   <p class="small-note">Each attribute level appears with roughly equal frequency across the 16 profiles. This balance is what makes the design statistically efficient — no single level dominates the sample and confounds the estimates.</p>
 
   <!-- ============================================================ -->
-  <h2>5. What Happens Next</h2>
+  <h2>5. Pre-Analysis Predictions</h2>
+
+  <p>Before you run a single line of code, commit your intuition to paper. These guesses are your benchmark. If the model disagrees with your gut, question the model before you question your gut.</p>
+
+  <div class="pause-box">
+    <h3>Prediction 1: Which profile will rate highest?</h3>
+    <p>Look at the 16 profiles above. Based on the descriptions, which ProfileID do you think will have the <strong>highest average rating</strong> across all 400 respondents? Write your guess and your reasoning.</p>
+    <table class="scribble-table">
+      <thead>
+        <tr><th>My Guess (ProfileID)</th><th>Why I think this</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><textarea placeholder="e.g., Profile 6 because Honda + 150km + 300 cities + Advanced + 6yr warranty..."></textarea></td>
+          <td><textarea placeholder="Explain your reasoning here..."></textarea></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pause-box">
+    <h3>Prediction 2: Which attribute will matter most?</h3>
+    <p>Rank the seven attributes by how much you think they will drive the 1–10 rating. Then write one sentence defending your top choice.</p>
+    <table class="scribble-table">
+      <thead>
+        <tr><th>Rank</th><th>Attribute</th><th>One-sentence defense</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td><textarea placeholder="e.g., Price"></textarea></td><td><textarea placeholder="Because Indian consumers are extremely price-sensitive..."></textarea></td></tr>
+        <tr><td>2</td><td><textarea placeholder=""></textarea></td><td><textarea placeholder=""></textarea></td></tr>
+        <tr><td>3</td><td><textarea placeholder=""></textarea></td><td><textarea placeholder=""></textarea></td></tr>
+        <tr><td>4</td><td><textarea placeholder=""></textarea></td><td><textarea placeholder=""></textarea></td></tr>
+        <tr><td>5</td><td><textarea placeholder=""></textarea></td><td><textarea placeholder=""></textarea></td></tr>
+        <tr><td>6</td><td><textarea placeholder=""></textarea></td><td><textarea placeholder=""></textarea></td></tr>
+        <tr><td>7</td><td><textarea placeholder=""></textarea></td><td><textarea placeholder=""></textarea></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pause-box">
+    <h3>Prediction 3: How many segments exist?</h3>
+    <p>Do you think 400 respondents will behave as one homogeneous market, or will there be distinct groups who want different things? If groups, what defines them?</p>
+    <table class="scribble-table">
+      <thead>
+        <tr><th>My prediction</th><th>What defines each group?</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><textarea placeholder="e.g., 3 segments: Tech enthusiasts, Price hunters, Pragmatists..."></textarea></td>
+          <td><textarea placeholder="Describe what each group values most..."></textarea></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>6. What Happens Next</h2>
 
   <p>With these 16 profiles, 400 respondents provided 6,400 ratings. Your task is to reverse-engineer the part-worth utilities: how much does each attribute level add to (or subtract from) the purchase-likelihood score?</p>
 
@@ -307,14 +387,8 @@ display(HTML("""
   </ol>
 
   <div class="pause-box">
-    <h3>Pause and Reflect</h3>
-    <p>Before you run any code, look at the 16 profiles above and answer:</p>
-    <ul>
-      <li>Which profile would <em>you</em> rate highest? Why?</li>
-      <li>Which profile is the "worst deal" — high price with low specs?</li>
-      <li>Do any profiles feel unrealistic? (That is intentional — unrealistic profiles test whether respondents are paying attention.)</li>
-    </ul>
-    <p>Your intuition is the benchmark. If the model disagrees with your gut, question the model before you question your gut.</p>
+    <h3>Ready to Begin?</h3>
+    <p>Run the next code cell to upload the data and inspect it. Keep your predictions visible — you will compare them against the actual results after the analysis.</p>
   </div>
 
 </div>
