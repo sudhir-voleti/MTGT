@@ -157,7 +157,7 @@ def run_overlay():
         print("V/A/E OF 'NONE' CHOOSERS BY SEGMENT")
         print("="*60)
 
-        merged_seg = sim_df.merge(vae[['RespID', 'V', 'A', 'E', 'Segment']], on='RespID', how='left')
+        merged_seg = sim_df.merge(vae[['RespID', 'V', 'A', 'E']], on='RespID', how='left')
         none_weights = merged_seg['P_None'].values
 
         for seg in sorted(merged_seg['Segment'].unique()):
@@ -171,7 +171,8 @@ def run_overlay():
                 print(f"   V (Value):    {v_wt:6.2f}")
                 print(f"   A (Access):   {a_wt:6.2f}")
                 print(f"   E (Evidence): {e_wt:6.2f}")
-                print(f"   → Why they chose None: {'Low A (price too high)' if a_wt < 0 else 'Low E (no trust)' if e_wt < 0 else 'Low V (product not compelling)'}")
+                reason = 'Low A (price too high)' if a_wt < 0 else 'Low E (no trust)' if e_wt < 0 else 'Low V (product not compelling)' if v_wt < 0 else 'Mixed factors'
+                print(f"   → Why they chose None: {reason}")
 
     # -------------------------------------------------------------------------
     # Scribble pause
