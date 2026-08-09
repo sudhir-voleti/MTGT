@@ -1,0 +1,17 @@
+ProfileID,Range,Charge,Price,Service,Smart,Warranty,Brand
+1,75km,4hrs,85K,25cities,Basic,2yr,Yana
+2,110km,1.5hrs,110K,100cities,Advanced,4yr,Honda
+3,150km,4hrs,140K,300cities,Basic,6yr,Ola
+4,75km,1.5hrs,85K,25cities,Advanced,2yr,Ather
+5,110km,4hrs,110K,100cities,Basic,4yr,Yana
+6,150km,1.5hrs,140K,300cities,Advanced,6yr,Honda
+7,75km,4hrs,85K,25cities,Basic,2yr,Ola
+8,110km,1.5hrs,110K,100cities,Advanced,4yr,Ather
+9,150km,4hrs,140K,300cities,Basic,6yr,Yana
+10,75km,1.5hrs,85K,25cities,Advanced,2yr,Honda
+11,110km,4hrs,110K,100cities,Basic,4yr,Ola
+12,150km,1.5hrs,140K,300cities,Advanced,6yr,Ather
+13,75km,4hrs,85K,25cities,Basic,2yr,Honda
+14,110km,1.5hrs,110K,100cities,Advanced,4yr,Yana
+15,150km,4hrs,140K,300cities,Basic,6yr,Ather
+16,75km,1.5hrs,85K,25cities,Advanced,2yr,Ola
