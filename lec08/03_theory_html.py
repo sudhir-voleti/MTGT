@@ -140,33 +140,44 @@ display(HTML("""
     <p>Before you run the cell, look at your segment profiles from Step 1.</p>
     <p>Which pillar do you think collapses when moving from Visionaries to Pragmatists? Write your prediction:</p>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Segment</th>
-          <th>My Prediction: Collapsing Pillar</th>
-          <th>Why?</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Visionaries / Early Adopters</td>
-          <td></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td>Pragmatists / Early Majority</td>
-          <td></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td>Skeptics / Late Majority</td>
-          <td></td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
-
+<table style="width:100%; border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 14.5px;">
+  <thead>
+    <tr>
+      <th style="background-color: #003366; color: white; padding: 11px 14px; text-align: left; border: 1px solid #003366;">Segment</th>
+      <th style="background-color: #003366; color: white; padding: 11px 14px; text-align: left; border: 1px solid #003366;">My Prediction: Collapsing Pillar</th>
+      <th style="background-color: #003366; color: white; padding: 11px 14px; text-align: left; border: 1px solid #003366;">Why?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding: 10px 14px; border: 1px solid #d0d7de; background-color: #f8fafc; font-weight: 600;">Visionaries / Early Adopters</td>
+      <td style="padding: 8px 10px; border: 1px solid #d0d7de; background-color: #f8fafc;">
+        <input type="text" placeholder="e.g. Access / Evidence / none" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:14px; box-sizing:border-box;">
+      </td>
+      <td style="padding: 8px 10px; border: 1px solid #d0d7de; background-color: #f8fafc;">
+        <input type="text" placeholder="Your reasoning…" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:14px; box-sizing:border-box;">
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 10px 14px; border: 1px solid #d0d7de; font-weight: 600;">Pragmatists / Early Majority</td>
+      <td style="padding: 8px 10px; border: 1px solid #d0d7de;">
+        <input type="text" placeholder="e.g. Access / Evidence / none" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:14px; box-sizing:border-box;">
+      </td>
+      <td style="padding: 8px 10px; border: 1px solid #d0d7de;">
+        <input type="text" placeholder="Your reasoning…" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:14px; box-sizing:border-box;">
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 10px 14px; border: 1px solid #d0d7de; background-color: #f8fafc; font-weight: 600;">Skeptics / Late Majority</td>
+      <td style="padding: 8px 10px; border: 1px solid #d0d7de; background-color: #f8fafc;">
+        <input type="text" placeholder="e.g. Access / Evidence / none" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:14px; box-sizing:border-box;">
+      </td>
+      <td style="padding: 8px 10px; border: 1px solid #d0d7de; background-color: #f8fafc;">
+        <input type="text" placeholder="Your reasoning…" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:14px; box-sizing:border-box;">
+      </td>
+    </tr>
+  </tbody>
+</table>
     <p>Remember: the algorithm found the clusters. You are now diagnosing <strong>why one segment buys and another refuses</strong>. That is the difference between segmentation and strategy.</p>
     <p>Run the next cell when you are ready.</p>
   </div>
