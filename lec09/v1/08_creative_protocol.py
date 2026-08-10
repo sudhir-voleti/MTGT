@@ -117,7 +117,9 @@ HTML_CONTENT = """
   <div class="subtitle">From Part-Worths to Print Ads — Lec09 Yana Mobility &nbsp;|&nbsp; MTGT @ ISB</div>
 
   <div class="callout">
-    <strong>The logic:</strong> A great ad is not born whole. It is assembled from tested parts. You will use genAI to generate <em>variations</em> of each ad element, test them in isolation with your NLM persona, pick winners, and assemble a full creative. Then you test the whole.
+    <strong>The logic:</strong> A great ad is not born whole. It is assembled from tested parts. 
+     <p>You will use genAI to generate <em>variations</em> of each ad element, test them in isolation with your NLM persona, pick winners, and assemble a full creative. 
+     <p>Then, finally, you test the whole. Ready?
   </div>
 
   <h2>The 7 Atomic Elements</h2>
