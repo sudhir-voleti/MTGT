@@ -3,7 +3,7 @@ from IPython.display import HTML, display
 display(HTML("""
 <h3>Part A — Product Rating Task</h3>
 <p>You will see 16 electric scooter profiles, one at a time. Each profile describes a specific scooter available in the market. <strong>Rate your likelihood of buying it</strong> on a scale of 1 to 10.</p>
-<p><em>1 = "I would definitely not buy this scooter"</em> &nbsp;|&nbsp; <em>10 = "I would definitely buy this scooter"</em></p>
+<p><em>1 = "I would definitely NOT buy this scooter"</em> &nbsp;|&nbsp; <em>10 = "I would definitely buy this scooter"</em></p>
 
 <div style="border:2px solid #003366; border-radius:8px; padding:20px; max-width:600px; margin:20px 0; background:#f8fafc;">
   <div style="font-weight:bold; color:#003366; font-size:1.1em; margin-bottom:12px;">Profile 1 of 16</div>
